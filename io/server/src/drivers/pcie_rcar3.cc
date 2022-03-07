@@ -444,6 +444,7 @@ Rcar3_pcie_bridge::access_disable(Cfg_addr addr)
 void
 Rcar3_pcie_bridge::alloc_msi_page(void **virt, l4_addr_t *phys)
 {
+  auto dma_mgr = L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"));
   _ds_msi = L4Re::Util::make_unique_cap<L4Re::Dataspace>();
   L4Re::chksys(L4Re::Env::env()->mem_alloc()
                ->alloc(L4_PAGESIZE, _ds_msi.get(),
@@ -453,8 +454,8 @@ Rcar3_pcie_bridge::alloc_msi_page(void **virt, l4_addr_t *phys)
                         "Allocate DMA space cap");
   L4Re::chksys(L4Re::Env::env()->user_factory()->create(d.get()),
                "Create DMA space");
-  L4Re::chksys(d->associate(L4::Ipc::Cap<L4::Task>(),
-                            L4Re::Dma_space::Space_attrib::Phys_space),
+  L4Re::chksys(dma_mgr->associate_phys(L4::Ipc::make_cap_rws(d.get()),
+                                       L4Re::Dma_space_mgr::Space_attribs::None),
                "Associate DMA space for CPU physical");
   l4_size_t phys_size;
   L4Re::Dma_space::Dma_addr phys_ram = 0;

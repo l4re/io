@@ -95,11 +95,12 @@ void Mmio_data_space::alloc_ram(Size size, unsigned long alloc_flags)
   static L4::Cap<L4Re::Dma_space> dma_space;
   if (L4_UNLIKELY(!dma_space))
     {
+      auto dma_mgr = L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"));
       auto uf = L4Re::Env::env()->user_factory();
       auto d = L4Re::chkcap(L4Re::Util::make_unique_cap<L4Re::Dma_space>());
       L4Re::chksys(uf->create(d.get()));
-      L4Re::chksys(d->associate(L4::Ipc::Cap<L4::Task>(),
-                                L4Re::Dma_space::Space_attrib::Phys_space),
+      L4Re::chksys(dma_mgr->associate_phys(L4::Ipc::make_cap_rws(d.get()),
+                                           L4Re::Dma_space_mgr::Space_attribs::None),
                    "associating DMA space for CPU physical");
       dma_space = d.release();
     }
