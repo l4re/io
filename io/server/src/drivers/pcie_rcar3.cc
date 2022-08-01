@@ -444,7 +444,9 @@ Rcar3_pcie_bridge::access_disable(Cfg_addr addr)
 void
 Rcar3_pcie_bridge::alloc_msi_page(void **virt, l4_addr_t *phys)
 {
-  auto dma_mgr = L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"));
+  auto dma_mgr =
+    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
+                 "Get DMA space manager capability");
   _ds_msi = L4Re::Util::make_unique_cap<L4Re::Dataspace>();
   L4Re::chksys(L4Re::Env::env()->mem_alloc()
                ->alloc(L4_PAGESIZE, _ds_msi.get(),

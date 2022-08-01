@@ -50,7 +50,9 @@ Dma_domain_if::set_dma_space(bool set, L4::Cap<L4Re::Dma_space> space)
   if (!set)
     return 0; // FIXME: space->disassociate(_kern_dma_space);
 
-  auto dma_mgr = L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"));
+  auto dma_mgr =
+    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
+                 "Get DMA space manager cap from env");
   if (!_supports_remapping)
     {
       d_printf(DBG_DEBUG2, "DMA: use CPU-phys addresses for DMA\n");
