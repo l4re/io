@@ -193,8 +193,12 @@ static int alloc_anon_ram_resources()
   if (int r = l4_error(uf->create(_dma_space)))
     return r;
 
-  if (int r = _dma_space->associate(L4::Ipc::Cap<L4::Task>(),
-                                    L4Re::Dma_space::Space_attrib::Phys_space))
+  auto dma_mgr =
+    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma-mgr"),
+                 "Get DMA space manager cap");
+
+  if (int r = dma_mgr->associate_phys(L4::Ipc::make_cap_rws(_dma_space),
+                                      L4Re::Dma_space_mgr::Space_attribs::None))
     return r;
 
   for (int i = 0; _devs[i].name; ++i)
