@@ -118,11 +118,9 @@ void Mmio_data_space::alloc_ram(Size size, unsigned long alloc_flags)
   L4Re::chksys(L4Re::Env::env()->mem_alloc()->alloc(size, _ds_ram.get(),
                                                     ma_flags));
 
-  l4_size_t ds_size = size;
+  L4Re::Dma_space::Dma_size ds_size = size;
   L4Re::Dma_space::Dma_addr phys_start;
   L4Re::chksys(dma_space->map(L4::Ipc::make_cap_rw(_ds_ram.get()), 0, &ds_size,
-               L4Re::Dma_space::Attributes::None,
-               L4Re::Dma_space::Bidirectional,
                &phys_start));
   if (size > ds_size)
     throw(L4::Out_of_memory("not really"));
