@@ -106,22 +106,26 @@ public:
   }
 };
 
-class Generic_bridge : public Bridge_base, public Dev
+class Bridge : public Bridge_base, public Dev
 {
+  Resource *mmio = nullptr;
+  Resource *pref_mmio = nullptr;
+  Resource *io = nullptr;
+
 public:
   unsigned char primary;
   using Dev::cfg_write;
   using Dev::cfg_read;
 
   /**
-   * Constructor to create a new Generic_bridge object
+   * Constructor to create a new Bridge object
    *
    * \param[in] host     Parent device
    * \param[in] bridge   The PCI bridge interface to use for this generic
    *                     bridge.
    * \param[in] cfg      Config cache object for this generic bridge.
    */
-  Generic_bridge(Hw::Device *host, Bridge_if *bridge, Config_cache const &cfg)
+  Bridge(Hw::Device *host, Bridge_if *bridge, Config_cache const &cfg)
   : Dev(host, bridge, cfg), primary(0)
   {}
 
@@ -187,19 +191,6 @@ public:
   }
 
   int enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const override;
-};
-
-class Bridge : public Generic_bridge
-{
-public:
-  Resource *mmio = nullptr;
-  Resource *pref_mmio = nullptr;
-  Resource *io = nullptr;
-
-  explicit Bridge(Hw::Device *host, Bridge_if *bridge,
-                  Config_cache const &cfg)
-  : Generic_bridge(host, bridge, cfg)
-  {}
 
   void setup_children(Hw::Device *host) override;
   void discover_resources(Hw::Device *host) override;

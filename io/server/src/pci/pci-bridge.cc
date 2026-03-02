@@ -50,7 +50,7 @@ Pci_pci_bridge_irq_router_rs::request(Resource *parent, ::Device *pdev,
 }
 
 void
-Generic_bridge::check_bus_config()
+Bridge::check_bus_config()
 {
   auto c = config();
 
@@ -88,7 +88,7 @@ Generic_bridge::check_bus_config()
 }
 
 int
-Generic_bridge::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
+Bridge::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
 {
   if (auto *parent = dynamic_cast<Dma_src_feature*>(parent_bridge()))
     if (int ret = parent->enumerate_dma_src_ids(cb))
@@ -345,77 +345,8 @@ public:
   }
 };
 
-class Cardbus_bridge : public Generic_bridge
-{
-public:
-  Cardbus_bridge(Hw::Device *host, Bridge_if *bridge,
-                 Config_cache const &cfg)
-  : Generic_bridge(host, bridge, cfg)
-  {}
 
-  void discover_resources(Hw::Device *host) override;
-
-  Dma_requester_id dma_alias() const override
-  {
-    // TODO: does the cardbus bridge really take ownership?
-    return Dma_requester_id::rewrite(segment_nr(), bus_nr(), devfn());
-  }
-};
-
-void
-Cardbus_bridge::discover_resources(Hw::Device *host)
-{
-  if (flags.discovered())
-    return;
-
-  auto c = config();
-
-  Resource *r = new Resource_provider(Resource::Mmio_res | Resource::Mem_type_rw
-                                      | Resource::F_can_move
-                                      | Resource::F_can_resize);
-  r->set_id("WIN0");
-  r->start(c.read<l4_uint32_t>(Config::Cb_mem_base_0));
-  r->end(c.read<l4_uint32_t>(Config::Cb_mem_limit_0));
-  if (!r->end())
-    r->set_empty();
-  r->validate();
-  host->add_resource_rq(r);
-
-  r = new Resource_provider(Resource::Mmio_res | Resource::Mem_type_rw
-                            | Resource::F_can_move | Resource::F_can_resize);
-  r->set_id("WIN1");
-  r->start(c.read<l4_uint32_t>(Config::Cb_mem_base_1));
-  r->end(c.read<l4_uint32_t>(Config::Cb_mem_limit_1));
-  if (!r->end())
-    r->set_empty();
-  r->validate();
-  host->add_resource_rq(r);
-
-  r = new Resource_provider(Resource::Io_res | Resource::F_can_move
-                            | Resource::F_can_resize);
-  r->set_id("WIN2");
-  r->start(c.read<l4_uint32_t>(Config::Cb_io_base_0));
-  r->end(c.read<l4_uint32_t>(Config::Cb_io_limit_0));
-  if (!r->end())
-    r->set_empty();
-  r->validate();
-  host->add_resource_rq(r);
-
-  r = new Resource_provider(Resource::Io_res | Resource::F_can_move
-                            | Resource::F_can_resize);
-  r->set_id("WIN3");
-  r->start(c.read<l4_uint32_t>(Config::Cb_io_base_1));
-  r->end(c.read<l4_uint32_t>(Config::Cb_io_limit_1));
-  if (!r->end())
-    r->set_empty();
-  r->validate();
-  host->add_resource_rq(r);
-
-  flags.discovered() = true;
-}
-
-
-static Generic_bridge *
+static Bridge *
 create_pci_pci_bridge(Bridge_if *bridge,
                       Config const &,
                       Config_cache const &cc,
@@ -429,7 +360,7 @@ create_pci_pci_bridge(Bridge_if *bridge,
       return nullptr;
     }
 
-  Generic_bridge *b = nullptr;
+  Bridge *b = nullptr;
   if (cc.pcie_cap)
     {
       switch (cc.pcie_type)
@@ -462,26 +393,6 @@ create_pci_pci_bridge(Bridge_if *bridge,
   return b;
 }
 
-static Generic_bridge *
-create_pci_cardbus_bridge(Bridge_if *bridge,
-                          Config const &,
-                          Config_cache const &cc,
-                          Hw::Device *hw)
-{
-  if (cc.type() != 2)
-    {
-      d_printf(DBG_WARN,
-               "ignoring PCI-Cardbus bridge with invalid header type: %u (%08x)\n",
-               (unsigned)cc.type(), hw->adr());
-      return nullptr;
-    }
-
-  hw->set_name_if_empty("PCI-to-Cardbus bridge");
-  auto b = new Cardbus_bridge(hw, bridge, cc);
-  b->check_bus_config();
-  return b;
-}
-
 static Dev *
 create_pci_bridge(Bridge_if *bridge,
                   Config const &cfg,
@@ -491,7 +402,9 @@ create_pci_bridge(Bridge_if *bridge,
   switch (cc.sub_class())
     {
     case 0x4: return create_pci_pci_bridge(bridge, cfg, cc, hw);
-    case 0x7: return create_pci_cardbus_bridge(bridge, cfg, cc, hw);
+    case 0x7:
+      d_printf(DBG_WARN, "ignoring CardBus bridge: %08x\n", hw->adr());
+      return nullptr;
     default:
       if (cc.type() != 0)
         {
