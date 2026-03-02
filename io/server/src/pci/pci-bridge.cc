@@ -90,7 +90,7 @@ Bridge::check_bus_config()
 int
 Bridge::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
 {
-  if (auto *parent = dynamic_cast<Dma_src_feature*>(parent_bridge()))
+  if (auto *parent = dynamic_cast<Dev *>(parent_bridge()))
     if (int ret = parent->enumerate_dma_src_ids(cb))
       return ret;
 
