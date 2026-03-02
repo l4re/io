@@ -61,6 +61,47 @@ Managed_dma_space::~Managed_dma_space()
     d_printf(DBG_ERR, "Could not disassociate: %d\n", ret);
 }
 
+l4_ret_t
+Managed_dma_space::get_msi_mapping(l4_uint64_t phys, l4_uint64_t *iova)
+{
+  l4_uint64_t aligned_phys = L4::trunc_page(phys);
+  unsigned page_offs = phys - aligned_phys;
+
+  auto it = _msi_mappings.find(aligned_phys);
+  if (it != _msi_mappings.end())
+    {
+      *iova = it->second + page_offs;
+      return 0;
+    }
+
+  l4_addr_t virt = res_map_iomem(aligned_phys, L4_PAGESIZE);
+  if (!virt)
+    return -L4_ENOMEM;
+
+  auto dma_mgr = L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr");
+  if (!dma_mgr)
+    return -L4_ENOMEM;
+
+  L4Re::Dma_space::Dma_addr dma_addr = L4_PAGESIZE; // avoid 0
+  l4_ret_t res = dma_mgr->block_area(L4::Ipc::make_cap_rws(_dma_space.get()),
+                                     &dma_addr, L4_PAGESIZE, -1,
+                                     L4Re::Dma_space_mgr::Search_addr,
+                                     L4_PAGESHIFT);
+  if (res < 0)
+    return res;
+
+  res = l4_error(_dma_task->map(L4Re::This_task,
+                                l4_fpage(virt, L4_PAGESHIFT, L4_FPAGE_RW),
+                                dma_addr));
+  if (res < 0)
+    return res;
+
+  *iova = dma_addr + page_offs;
+  _msi_mappings[aligned_phys] = dma_addr;
+
+  return 0;
+}
+
 
 char const *
 Dma_domain_if::resv_type_to_str(Resv_type type)

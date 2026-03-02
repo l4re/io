@@ -6,6 +6,7 @@
 #include <l4/re/dma_space>
 #include <l4/re/util/unique_cap>
 #include <functional>
+#include <map>
 #include <memory>
 
 class Dma_domain_set;
@@ -23,9 +24,18 @@ public:
   L4::Cap<L4Re::Dma_space> dma_space() const { return _dma_space.get(); }
   L4::Cap<L4::Task> dma_task() const { return _dma_task.get(); }
 
+  /**
+   * Get (or create) mapping of MSI controller in this Dma_space.
+   *
+   * \param      phys  The physical address of the MSI controller
+   * \param[out] iova  DMA virtual address of the mapping
+   */
+  l4_ret_t get_msi_mapping(l4_uint64_t phys, l4_uint64_t *iova);
+
 private:
   L4Re::Util::Unique_cap<L4Re::Dma_space> _dma_space;
   L4Re::Util::Unique_cap<L4::Task> _dma_task;
+  std::map<l4_uint64_t, l4_uint64_t> _msi_mappings;
 };
 
 class Dma_domain_if

@@ -391,29 +391,10 @@ public:
       // Apparently, the client did not yet attach the DMA space...
       return -L4_ENODEV;
 
-    l4_addr_t virt = res_map_iomem(msi_addr_phys, 4);
-    if (!virt)
-      return -L4_ENOMEM;
-
-    auto it = _its_maps.find(msi_addr_phys);
-    if (it != _its_maps.end())
-      *msi_addr_iova = it->second;
-    else
-      {
-        *msi_addr_iova = _its_next_addr + (msi_addr_phys & (L4_PAGESIZE - 1));
-        _its_maps[msi_addr_phys] = *msi_addr_iova;
-        _its_next_addr += L4_PAGESIZE;
-      }
-
-    int res = l4_error(
-      mds->dma_task()->map(L4Re::This_task,
-                           l4_fpage(l4_trunc_size(virt, L4_PAGESHIFT),
-                                    L4_PAGESHIFT, L4_FPAGE_RW),
-                           l4_trunc_size(*msi_addr_iova, L4_PAGESHIFT)));
+    int res = mds->get_msi_mapping(msi_addr_phys, msi_addr_iova);
     if (res < 0)
-      d_printf(DBG_ERR,
-               "error: map_msi_src failed: %d, phys=0x%llx, virt=0x%lx, iova=0x%llx\n",
-               res, msi_addr_phys, virt, *msi_addr_iova);
+      d_printf(DBG_ERR, "error: get_msi_mapping() failed: %d, phys=0x%llx\n",
+               res, msi_addr_phys);
 
     return res;
   }
@@ -438,13 +419,6 @@ private:
 
     return it->second;
   }
-
-  // FIXME: this must be an address that is not in any PCI bridge window!
-  // FIXME: the region must be marked as reserved in the DMA address space!
-  //        Nothing else should be mapped at this addresses. Otherwise MSIs
-  //        won't work.
-  l4_uint64_t _its_next_addr = 0xf0000000;
-  std::map<l4_uint64_t, l4_uint64_t> _its_maps;
 
   std::map<unsigned, Root_complex *> _pci_segments;
 };
