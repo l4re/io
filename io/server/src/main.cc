@@ -291,6 +291,9 @@ public:
 
   int enumerate_dma_reservations(Dma_domain::Resv_cb) const override
   { return 0; }
+
+  int get_dma_limits(l4_uint64_t *, l4_uint64_t *) const override
+  { return -L4_EPERM; }
 };
 
 class Iommu_dma_domain : public Dma_domain
@@ -342,6 +345,13 @@ public:
   int enumerate_dma_reservations(Dma_domain::Resv_cb cb) const override
   { return _src->enumerate_dma_reservations(cb); }
 
+  int get_dma_limits(l4_uint64_t *min_addr, l4_uint64_t *max_addr) const override
+  {
+    *min_addr = _min_addr;
+    *max_addr = _max_addr;
+    return 0;
+  }
+
 private:
   int iommu_bind(L4::Cap<L4::Iommu> iommu, l4_uint64_t src)
   {
@@ -349,7 +359,12 @@ private:
     l4_uint64_t max_addr;
     int r = l4_error(iommu->bind(src, _managed_dma_space->dma_task(),
                                  &min_addr, &max_addr));
-    if (r < 0)
+    if (r >= 0)
+      {
+        _min_addr = std::max(_min_addr, min_addr);
+        _max_addr = std::min(_max_addr, max_addr);
+      }
+    else
       d_printf(DBG_ERR, "error: setting DMA for device: %d\n", r);
 
     return r;
@@ -365,6 +380,8 @@ private:
   }
 
   Hw::Dma_src_feature *_src = nullptr;
+  l4_uint64_t _min_addr = 0;
+  l4_uint64_t _max_addr = -1;
 };
 
 class Iommu_dma_domain_factory : public Hw::Dma_domain_factory

@@ -84,6 +84,7 @@ public:
   virtual void clear_managed_dma_space();
 
   virtual int enumerate_dma_reservations(Resv_cb cb) const = 0;
+  virtual int get_dma_limits(l4_uint64_t *min_addr, l4_uint64_t *max_addr) const = 0;
 
   virtual ~Dma_domain_if() = default;
 };
@@ -115,6 +116,14 @@ public:
   void add_to_group(Dma_domain_group *g);
 };
 
+/**
+ * Gather Dma_domain's of devices on a Vbus.
+ *
+ * Used to assign the magic ~0U DMA domain identifier. See
+ * System_bus::assign_dma_domain(). Because a device might be present on more
+ * than one Vbus, there is an additional indirection through the
+ * Dma_domain_group.
+ */
 class Dma_domain_set : public Dma_domain_if
 {
   friend class Dma_domain;
@@ -159,6 +168,7 @@ public:
   int set_managed_dma_space(std::shared_ptr<Managed_dma_space> space) override;
   void clear_managed_dma_space() override;
   int enumerate_dma_reservations(Resv_cb cb) const override;
+  int get_dma_limits(l4_uint64_t *min_addr, l4_uint64_t *max_addr) const override;
 };
 
 class Dma_domain_group

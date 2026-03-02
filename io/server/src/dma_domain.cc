@@ -134,7 +134,8 @@ Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
   d_printf(DBG_DEBUG2, "DMA: create kern DMA space for managed DMA\n");
   auto mds = std::make_shared<Managed_dma_space>(std::move(dma_space));
 
-  // Bind the device / all devices to the Managed_dma_space.
+  // Bind the device / all devices to the Managed_dma_space. This gathers the
+  // DMA address limits.
   if (int err = set_managed_dma_space(mds); err < 0)
     return err;
 
@@ -155,6 +156,24 @@ Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
   if (err < 0)
     {
       d_printf(DBG_DEBUG2, "DMA: enumerate_dma_reservations failed: %d\n", err);
+      clear_managed_dma_space();
+      return err;
+    }
+
+  l4_uint64_t min_addr, max_addr;
+  err = get_dma_limits(&min_addr, &max_addr);
+  if (err < 0)
+    {
+      d_printf(DBG_DEBUG2, "DMA: get_dma_limits failed: %d\n", err);
+      clear_managed_dma_space();
+      return err;
+    }
+
+  err = dma_mgr->set_limits(L4::Ipc::make_cap_rws(mds->dma_space()),
+                            min_addr, max_addr);
+  if (err < 0)
+    {
+      d_printf(DBG_DEBUG2, "DMA: set_dma_limits failed: %d\n", err);
       clear_managed_dma_space();
       return err;
     }
@@ -257,5 +276,25 @@ Dma_domain_set::enumerate_dma_reservations(Resv_cb cb) const
     if (int err = cb(r.type, r.first, r.last); err < 0)
       return err;
 
+  return 0;
+}
+
+int
+Dma_domain_set::get_dma_limits(l4_uint64_t *min_addr, l4_uint64_t *max_addr) const
+{
+  l4_uint64_t all_min = 0;
+  l4_uint64_t all_max = -1;
+  for (auto d : _domains)
+    {
+      l4_uint64_t dom_min, dom_max;
+      if (int err = d->get_dma_limits(&dom_min, &dom_max); err < 0)
+        return err;
+
+      all_min = std::max(all_min, dom_min);
+      all_max = std::min(all_max, dom_max);
+    }
+
+  *min_addr = all_min;
+  *max_addr = all_max;
   return 0;
 }
