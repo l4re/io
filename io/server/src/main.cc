@@ -286,8 +286,8 @@ arg_init(int argc, char * const *argv, Io_config_x *cfg)
 class Dma_domain_phys : public Dma_domain
 {
 public:
-  int create_managed_kern_dma_space() override
-  { return -L4_ENODEV; }
+  int set_managed_dma_space(std::shared_ptr<Managed_dma_space>) override
+  { return -L4_EPERM; }
 };
 
 class Iommu_dma_domain : public Dma_domain
@@ -302,9 +302,44 @@ public:
     _supports_remapping = true;
   }
 
+  int set_managed_dma_space(std::shared_ptr<Managed_dma_space> space) override
+  {
+    if (int err = Dma_domain::set_managed_dma_space(space); err < 0)
+      return err;
+
+    L4::Cap<L4::Iommu> iommu = L4Re::Env::env()->get_cap<L4::Iommu>("iommu");
+    if (int err = _src->enumerate_dma_src_ids([this, iommu](l4_uint64_t src) -> int
+                                              {
+                                                return this->iommu_bind(iommu, src);
+                                              });
+        err < 0)
+      {
+        Dma_domain::clear_managed_dma_space();
+        return err;
+      }
+
+    return 0;
+  }
+
+  void clear_managed_dma_space() override
+  {
+    if (_managed_dma_space)
+      {
+        L4::Cap<L4::Iommu> iommu = L4Re::Env::env()->get_cap<L4::Iommu>("iommu");
+        _src->enumerate_dma_src_ids([this, iommu](l4_uint64_t src) -> int
+                                    {
+                                      this->iommu_unbind(iommu, src);
+                                      return 0;
+                                    });
+      }
+
+    Dma_domain::clear_managed_dma_space();
+  }
+
+private:
   int iommu_bind(L4::Cap<L4::Iommu> iommu, l4_uint64_t src)
   {
-    int r = l4_error(iommu->bind(src, _kern_dma_space));
+    int r = l4_error(iommu->bind(src, _managed_dma_space->dma_task()));
     if (r < 0)
       d_printf(DBG_ERR, "error: setting DMA for device: %d\n", r);
 
@@ -313,39 +348,13 @@ public:
 
   int iommu_unbind(L4::Cap<L4::Iommu> iommu, l4_uint64_t src)
   {
-    int r = l4_error(iommu->unbind(src, _kern_dma_space));
+    int r = l4_error(iommu->unbind(src, _managed_dma_space->dma_task()));
     if (r < 0)
       d_printf(DBG_ERR, "error: unbinding DMA for device: %d\n", r);
 
     return r;
   }
 
-  int set_managed_kern_dma_space(L4::Cap<L4::Task> s) override
-  {
-    Dma_domain::set_managed_kern_dma_space(s);
-
-    L4::Cap<L4::Iommu> iommu = L4Re::Env::env()->get_cap<L4::Iommu>("iommu");
-
-    return _src->enumerate_dma_src_ids([this, iommu](l4_uint64_t src) -> int
-                                       {
-                                         return this->iommu_bind(iommu, src);
-                                       });
-  }
-
-  int create_managed_kern_dma_space() override
-  {
-    assert (!_kern_dma_space);
-
-    auto dma = L4Re::chkcap(L4Re::Util::make_unique_cap<L4::Task>());
-    L4Re::chksys(L4Re::Env::env()->factory()->create(dma.get(), L4_PROTO_DMA_SPACE));
-
-    int r = set_managed_kern_dma_space(dma.release());
-    if (r < 0)
-      d_printf(DBG_ERR, "Error: Failed to create kernel-side DMA space: %d\n", r);
-    return r;
-  }
-
-private:
   Hw::Dma_src_feature *_src = nullptr;
 };
 

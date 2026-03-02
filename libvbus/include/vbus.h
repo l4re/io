@@ -189,8 +189,9 @@ enum L4vbus_dma_domain_assign_flags
  *                   the vBUS). If the value is ~0U the DMA space of the whole
  *                   vBUS is used.
  * \param flags      A combination of #L4vbus_dma_domain_assign_flags.
- * \param dma_space  The DMA space capability to bind or unbind, this must
- *                   be an L4Re::Dma_space.
+ * \param dma_space  The DMA space capability to bind, this must
+ *                   be an L4Re::Dma_space. For unbind the `dma_space` is
+ *                   ignored and should be L4_INVALID_CAP.
  *
  * \retval 0           Operation completed successfully.
  * \retval -L4_ENOENT  The vbus does not support a global DMA domain or no DMA

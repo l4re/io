@@ -386,31 +386,41 @@ System_bus::request_resource(L4::Ipc::Iostream &ios)
 int
 System_bus::assign_dma_domain(L4::Ipc::Iostream &ios)
 {
-  l4_msgtag_t tag = ios.tag();
-  if (!tag.items())
-    return -L4_EINVAL;
+  L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space;
 
+  l4_msgtag_t tag = ios.tag();
   if (tag.words() > L4::Ipc::Msg::Mr_words - L4::Ipc::Msg::Item_words)
     return -L4_EMSGTOOLONG;
 
   unsigned id, flags;
   ios >> id >> flags;
 
-  L4::Ipc::Snd_fpage spc;
-  int r = L4::Ipc::Msg::msg_get(
-      reinterpret_cast<char *>(&l4_utcb_mr_u(ios.utcb())->mr[tag.words()]),
-      0, L4::Ipc::Msg::Item_bytes, spc);
+  bool is_bind = flags & L4VBUS_DMAD_BIND;
 
-  if (r < 0)
-    return r;
+  // For bind, a valid Dma_space capability is required! For unbind, we
+  // silently ignore it.
+  if (tag.items())
+    {
+      L4::Ipc::Snd_fpage spc;
+      int r = L4::Ipc::Msg::msg_get(
+          reinterpret_cast<char *>(&l4_utcb_mr_u(ios.utcb())->mr[tag.words()]),
+          0, L4::Ipc::Msg::Item_bytes, spc);
 
-  if (!spc.cap_received())
+      if (r < 0)
+        return r;
+
+      if (!spc.cap_received())
+        return -L4_EINVAL;
+
+      dma_space = L4Re::Util::Unique_cap<L4Re::Dma_space>(
+        server_iface()->rcv_cap<L4Re::Dma_space>(0));
+      if (int err = server_iface()->realloc_rcv_cap(0); err < 0)
+        return err;
+    }
+  else if (is_bind)
     return -L4_EINVAL;
 
-  L4::Cap<void> spc_cap = server_iface()->get_rcv_cap(0);
-
   Dma_domain_if *d = 0;
-
   if (id == ~0U)
     {
       d = _dma_domain_group.get();
@@ -438,12 +448,8 @@ System_bus::assign_dma_domain(L4::Ipc::Iostream &ios)
         }
     }
 
-  bool is_bind = flags & L4VBUS_DMAD_BIND;
-  int res = d->set_dma_space(is_bind, L4::cap_cast<L4Re::Dma_space>(spc_cap));
-  if (res >= 0 && is_bind)
-    server_iface()->realloc_rcv_cap(0);
-
-  return res;
+  return is_bind ? d->set_dma_space(std::move(dma_space))
+                 : d->clear_dma_space();
 }
 
 int

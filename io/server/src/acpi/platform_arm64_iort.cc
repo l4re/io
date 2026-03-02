@@ -379,14 +379,17 @@ public:
     if (!d)
       return -L4_ENODEV;
 
-    // Without DMA space we cannot map. This might be because we have no IOMMU
-    // or because the client did not yet attach the DMA space. We assume the
-    // former and just leave the address as-is.
-    if (!d->kern_dma_space())
+    // Without IOMMU we must return the actual physical address.
+    if (!d->supports_remapping())
       {
         *msi_addr_iova = msi_addr_phys;
         return 0;
       }
+
+    std::shared_ptr<Managed_dma_space> mds = d->managed_dma_space();
+    if (!mds)
+      // Apparently, the client did not yet attach the DMA space...
+      return -L4_ENODEV;
 
     l4_addr_t virt = res_map_iomem(msi_addr_phys, 4);
     if (!virt)
@@ -403,10 +406,10 @@ public:
       }
 
     int res = l4_error(
-      d->kern_dma_space()->map(L4Re::This_task,
-                               l4_fpage(l4_trunc_size(virt, L4_PAGESHIFT),
-                                        L4_PAGESHIFT, L4_FPAGE_RW),
-                               l4_trunc_size(*msi_addr_iova, L4_PAGESHIFT)));
+      mds->dma_task()->map(L4Re::This_task,
+                           l4_fpage(l4_trunc_size(virt, L4_PAGESHIFT),
+                                    L4_PAGESHIFT, L4_FPAGE_RW),
+                           l4_trunc_size(*msi_addr_iova, L4_PAGESHIFT)));
     if (res < 0)
       d_printf(DBG_ERR,
                "error: map_msi_src failed: %d, phys=0x%llx, virt=0x%lx, iova=0x%llx\n",

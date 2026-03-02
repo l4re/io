@@ -4,28 +4,48 @@
 
 #include <l4/sys/task>
 #include <l4/re/dma_space>
+#include <l4/re/util/unique_cap>
+#include <memory>
 
 class Dma_domain_set;
 class Dma_domain_group;
 
+/**
+ * A Dma_space and its associated kernel DMA task.
+ */
+class Managed_dma_space
+{
+public:
+  Managed_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space);
+  ~Managed_dma_space();
+
+  L4::Cap<L4Re::Dma_space> dma_space() const { return _dma_space.get(); }
+  L4::Cap<L4::Task> dma_task() const { return _dma_task.get(); }
+
+private:
+  L4Re::Util::Unique_cap<L4Re::Dma_space> _dma_space;
+  L4Re::Util::Unique_cap<L4::Task> _dma_task;
+};
+
 class Dma_domain_if
 {
 protected:
-  L4::Cap<L4::Task> _kern_dma_space = L4::Cap<L4::Task>::Invalid;
+  std::shared_ptr<Managed_dma_space> _managed_dma_space;
   static bool _supports_remapping;
 
 public:
-  L4::Cap<L4::Task> kern_dma_space() const
-  { return _kern_dma_space; }
+  std::shared_ptr<Managed_dma_space> managed_dma_space() const
+  { return _managed_dma_space; }
 
-  virtual int set_managed_kern_dma_space(L4::Cap<L4::Task> s)
-  {
-    _kern_dma_space = s;
-    return 0;
-  }
+  static bool supports_remapping()
+  { return _supports_remapping; }
 
-  virtual int create_managed_kern_dma_space() = 0;
-  virtual int set_dma_space(bool set, L4::Cap<L4Re::Dma_space> dma_space);
+  int set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space);
+  int clear_dma_space();
+
+  virtual int set_managed_dma_space(std::shared_ptr<Managed_dma_space> space);
+  virtual void clear_managed_dma_space();
+
   virtual ~Dma_domain_if() = default;
 };
 
@@ -97,7 +117,8 @@ private:
   }
 
 public:
-  int create_managed_kern_dma_space() override;
+  int set_managed_dma_space(std::shared_ptr<Managed_dma_space> space) override;
+  void clear_managed_dma_space() override;
 };
 
 class Dma_domain_group

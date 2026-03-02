@@ -39,95 +39,108 @@ Dma_domain::add_to_group(Dma_domain_group *g)
   add_to_set(g->_set);
 }
 
-int
-Dma_domain_if::set_dma_space(bool set, L4::Cap<L4Re::Dma_space> space)
+
+Managed_dma_space::Managed_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
+: _dma_space(std::move(dma_space)),
+  _dma_task(L4Re::chkcap(L4Re::Util::make_unique_cap<L4::Task>()))
 {
-  if (0)
-    printf("%s:%d: %s : %s\n", __FILE__, __LINE__, __func__,
-           set ? "bind" : "unbind");
+  L4Re::chksys(L4Re::Env::env()->factory()
+                  ->create(_dma_task.get(), L4_PROTO_DMA_SPACE));
+}
 
-  // FIXME: check trustworthiness of `space`
-  if (!set)
-    return 0; // FIXME: space->disassociate(_kern_dma_space);
-
+Managed_dma_space::~Managed_dma_space()
+{
   auto dma_mgr =
     L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
                  "Get DMA space manager cap from env");
+
+  int ret = dma_mgr->disassociate(L4::Ipc::make_cap_rws(_dma_space.get()));
+  if (ret < 0)
+    d_printf(DBG_ERR, "Could not disassociate: %d\n", ret);
+}
+
+
+int
+Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
+{
+  auto dma_mgr =
+    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
+                 "Get DMA space manager cap from env");
+
   if (!_supports_remapping)
     {
       d_printf(DBG_DEBUG2, "DMA: use CPU-phys addresses for DMA\n");
-      return dma_mgr->associate_phys(L4::Ipc::make_cap_rws(space),
+      return dma_mgr->associate_phys(L4::Ipc::make_cap_rws(dma_space.get()),
                                      L4Re::Dma_space_mgr::Space_attribs::None);
     }
 
-  if (!_kern_dma_space)
-    {
-      d_printf(DBG_DEBUG2, "DMA: create kern DMA space for managed DMA\n");
-      int r = create_managed_kern_dma_space();
-      if (r < 0)
-        return r;
-    }
+  d_printf(DBG_DEBUG2, "DMA: create kern DMA space for managed DMA\n");
+  auto mds = std::make_shared<Managed_dma_space>(std::move(dma_space));
+
+  // Bind the device / all devices to the Managed_dma_space.
+  if (int err = set_managed_dma_space(mds); err < 0)
+    return err;
 
   d_printf(DBG_DEBUG2, "DMA: associate managed DMA space (cap=%lx)\n",
-           _kern_dma_space.cap());
-  return dma_mgr->associate(L4::Ipc::make_cap_rws(space),
-                            L4::Ipc::make_cap_rws(_kern_dma_space),
-                            L4Re::Dma_space_mgr::Space_attribs::None);
+           mds->dma_task().cap());
+  int err = dma_mgr->associate(L4::Ipc::make_cap_rws(mds->dma_space()),
+                               L4::Ipc::make_cap_rws(mds->dma_task()),
+                               L4Re::Dma_space_mgr::Space_attribs::None);
+  if (err < 0)
+    {
+      d_printf(DBG_DEBUG2, "DMA: associate failed: %d\n", err);
+      clear_managed_dma_space();
+    }
+
+  return err;
 }
 
 int
-Dma_domain_set::create_managed_kern_dma_space()
+Dma_domain_if::clear_dma_space()
 {
-  assert (!_kern_dma_space);
+  if (!_supports_remapping || !_managed_dma_space)
+    return 0;
 
-  if (_domains.empty())
-    return -L4_ENOENT;
-
-  L4::Cap<L4::Task> kds = L4::Cap<L4::Task>::Invalid;
-  for (auto d: _domains)
-    {
-      if (d->kern_dma_space() && kds && kds != d->kern_dma_space())
-        {
-          d_printf(DBG_ERR, "error: conflicting DMA remapping assignment "
-                            "(conflicting DMA domain assignment)\n");
-          return -L4_EBUSY;
-        }
-
-      if (d->kern_dma_space())
-        kds = d->kern_dma_space();
-    }
-
-  if (kds)
-    d_printf(DBG_INFO, "reuse managed DMA domain for DMA domain group\n");
-  else
-    {
-      int r = _domains[0]->create_managed_kern_dma_space();
-      if (r < 0)
-        return r;
-      kds = _domains[0]->kern_dma_space();
-    }
-
-  for (auto d: _domains)
-    if (!d->kern_dma_space())
-      {
-        int r = d->set_managed_kern_dma_space(kds);
-        if (r < 0)
-          {
-            d_printf(DBG_ERR,
-                     "Error: Domain_set: "
-                     "Failed to create kernel-side DMA space for domain: %d\n", r);
-            return r;
-          }
-      }
-
-  int r = set_managed_kern_dma_space(kds);
-  if (r < 0)
-    {
-      d_printf(DBG_ERR,
-               "Error: Domain_set: "
-               "Failed to create kernel-side DMA space: %d\n", r);
-      return r;
-    }
+  // This will unbind the device(s) from the IOMMU.
+  clear_managed_dma_space();
 
   return 0;
+}
+
+int
+Dma_domain_if::set_managed_dma_space(std::shared_ptr<Managed_dma_space> space)
+{
+  if (_managed_dma_space)
+    return -L4_EBUSY;
+
+  _managed_dma_space = space;
+  return 0;
+}
+
+void
+Dma_domain_if::clear_managed_dma_space()
+{ _managed_dma_space = nullptr; }
+
+
+int
+Dma_domain_set::set_managed_dma_space(std::shared_ptr<Managed_dma_space> space)
+{
+  int i, ret = 0;
+
+  for (i = 0; i < static_cast<int>(_domains.size()); i++)
+    if ((ret = _domains[i]->set_managed_dma_space(space)) < 0)
+      break;
+
+  if (ret < 0)
+    while (i >= 0)
+      _domains[i--]->clear_managed_dma_space();
+
+  return ret;
+}
+
+void
+Dma_domain_set::clear_managed_dma_space()
+{
+  for (auto d : _domains)
+    d->clear_managed_dma_space();
 }
