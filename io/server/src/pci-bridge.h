@@ -190,7 +190,11 @@ public:
       return -L4_ENODEV;
   }
 
+  int pci_enum_dma_reservations(If *dev, Dma_requester_id rid,
+                                Dma_domain_if::Resv_cb cb) const override;
+
   int enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const override;
+  int enumerate_dma_reservations(Dev *dev, Dma_domain_if::Resv_cb cb) const override;
 
   void setup_children(Hw::Device *host) override;
   void discover_resources(Hw::Device *host) override;

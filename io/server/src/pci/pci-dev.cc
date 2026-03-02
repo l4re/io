@@ -136,6 +136,24 @@ Dev::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
   return 0;
 }
 
+int
+Dev::enumerate_dma_reservations(Dev *dev, Dma_domain_if::Resv_cb cb) const
+{
+  // TODO: Report resources of other sibling devices/functions if:
+  //   a) this device is part of a multi-function device / SR-IOV device, and
+  //   b) "ACS P2P Request Redirect" is not enabled.
+
+  // There are no constraints related to devices themselves. They all come from
+  // the PCI(e) topology (to prevent peer-to-peer traffic), the IOMMU itself
+  // (min/max DMA address) or firmware declared reserved memory regions. So we
+  // absolutely must be a device behind a (root) bridge...
+  if (!_bridge)
+    return -L4_ENODEV;
+
+  auto src = Dma_requester_id::source(segment_nr(), bus_nr(), devfn());
+  return _bridge->pci_enum_dma_reservations(dev, src, cb);
+}
+
 l4_uint32_t
 Dev::checked_cmd_read()
 {

@@ -177,6 +177,18 @@ struct Platform_adapter_if
    */
   virtual int map_msi_src(If *dev, l4_uint64_t msi_addr_phys,
                           l4_uint64_t *msi_addr_iova) = 0;
+
+  /**
+   * Enumerate reserved memory regions for a PCI device.
+   *
+   * Will be called for each possible DMA alias of a device.
+   *
+   * \param dev The PCI device whose reservations should be returned.
+   * \param rid The DMA requester ID of the device.
+   * \param cb  Invoked callback for each reserved memory region.
+   */
+  virtual int pci_enum_dma_reservations(If *dev, Dma_requester_id rid,
+                                        Dma_domain_if::Resv_cb cb) const = 0;
 };
 
 class Bridge_if : public Platform_adapter_if

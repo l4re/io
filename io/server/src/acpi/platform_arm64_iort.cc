@@ -418,6 +418,13 @@ public:
     return res;
   }
 
+  int pci_enum_dma_reservations(Hw::Pci::If *, Hw::Pci::Dma_requester_id,
+                                Dma_domain_if::Resv_cb) const override
+  {
+    // TODO: report RMRs applicable to the device
+    return 0;
+  }
+
 private:
   Root_complex *find_root_complex(unsigned segment) const
   {

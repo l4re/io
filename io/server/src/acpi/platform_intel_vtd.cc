@@ -441,6 +441,13 @@ public:
     *msi_addr_iova = msi_addr_phys;
     return 0;
   }
+
+  int pci_enum_dma_reservations(Hw::Pci::If *, Hw::Pci::Dma_requester_id,
+                                Dma_domain_if::Resv_cb) const override
+  {
+    // TODO: report RMRRs applicable to the device
+    return 0;
+  }
 };
 
 Hw::Pci::Platform_adapter_if *

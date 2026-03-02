@@ -49,6 +49,19 @@ protected:
       return -L4_ENODEV;
   }
 
+  int pci_enum_dma_reservations(If *dev, Dma_requester_id rid,
+                                Dma_domain_if::Resv_cb cb) const override
+  {
+    // Forward to platform adapter. Implements the handling of architectural
+    // and firmware declared reserved memory regions. Also needs to handle
+    // potential peer-to-peer traffic between root ports because this is
+    // implementation defined behaviour as far as the PCIe spec is concerned.
+    if (_platform_adapter)
+      return _platform_adapter->pci_enum_dma_reservations(dev, rid, cb);
+    else
+      return -L4_ENODEV;
+  }
+
   Dma_requester_id dma_alias() const override
   {
     // Root bridges don't create aliases

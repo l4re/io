@@ -110,6 +110,7 @@ public:
   }
 
   virtual int enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const;
+  virtual int enumerate_dma_reservations(Dev *dev, Dma_domain_if::Resv_cb cb) const;
 
   void add_saved_cap(Saved_cap *cap) { _saved_state.add_cap(cap); }
 
@@ -133,9 +134,9 @@ protected:
       return parent->enumerate_dma_src_ids(cb);
     }
 
-    int enumerate_dma_reservations(Dma_domain_if::Resv_cb) const override
+    int enumerate_dma_reservations(Dma_domain_if::Resv_cb cb) const override
     {
-      return 0;
+      return parent->enumerate_dma_reservations(parent, cb);
     }
 
     Dev *parent;

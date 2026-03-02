@@ -88,6 +88,32 @@ Bridge::check_bus_config()
 }
 
 int
+Bridge::pci_enum_dma_reservations(If *dev, Dma_requester_id rid,
+                                  Dma_domain_if::Resv_cb cb) const
+{
+  // Does this bridge create aliases? If yes, override the DMA requester ID of
+  // the downstream device for further reporting.
+  Dma_requester_id alias = dma_alias();
+  if (alias)
+    rid = alias;
+
+  // TODO: report all resouces that may cause P2P traffic:
+  // 1. On a legacy PCI bridge: everything on and below this bridge except
+  //    `dev`.
+  // 2. On PCIe downstream ports:
+  //  a) Unless "ACS Upstream Forwarding" is enabled: everything below this
+  //     port, except `dev`.
+  //  b) Unless "ACS P2P Request Redirect" and "ACS P2P Completion Redirect"
+  //     are enabled, all devices reachable through sibling downstream ports.
+
+  // Pass upwards for additional memory windows or RMRRs in root bridge.
+  if (auto *b = bridge())
+    return b->pci_enum_dma_reservations(dev, rid, cb);
+  else
+    return -L4_ENODEV;
+}
+
+int
 Bridge::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
 {
   if (auto *parent = dynamic_cast<Dev *>(parent_bridge()))
@@ -110,6 +136,15 @@ Bridge::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
   // Stop emitting DMA source IDs if the bridge takes ownership of all
   // transactions.
   return alias.is_rewrite() ? 1 : 0;
+}
+
+int
+Bridge::enumerate_dma_reservations(Dev *, Dma_domain_if::Resv_cb) const
+{
+  // This should not happen. A PCI bridge itself should not be part of a vBUS.
+  d_printf(DBG_ERR,
+           "enumerate_dma_reservations() called for PCI bridge: unsupported!\n");
+  return -L4_ENODEV;
 }
 
 void
