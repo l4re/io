@@ -377,6 +377,12 @@ run(int argc, char * const *argv)
 
   d_printf(DBG_INFO, "Verboseness level: %d\n", Io_config::cfg->verbose());
 
+  if (!L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"))
+    {
+      printf("ERROR: no 'dma_mgr' capability! This cap needs to be granted from moe.\n");
+      exit(1);
+    }
+
   res_init();
 
   if (dlevel(DBG_DEBUG))
