@@ -345,7 +345,10 @@ public:
 private:
   int iommu_bind(L4::Cap<L4::Iommu> iommu, l4_uint64_t src)
   {
-    int r = l4_error(iommu->bind(src, _managed_dma_space->dma_task()));
+    l4_uint64_t min_addr;
+    l4_uint64_t max_addr;
+    int r = l4_error(iommu->bind(src, _managed_dma_space->dma_task(),
+                                 &min_addr, &max_addr));
     if (r < 0)
       d_printf(DBG_ERR, "error: setting DMA for device: %d\n", r);
 
