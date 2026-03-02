@@ -13,25 +13,19 @@ class Dma_domain_if
 protected:
   L4::Cap<L4::Task> _kern_dma_space = L4::Cap<L4::Task>::Invalid;
   static bool _supports_remapping;
-  bool _managed_kern_dma_space = false;
 
 public:
-  bool managed_kern_dma_space() const
-  { return _managed_kern_dma_space; }
-
   L4::Cap<L4::Task> kern_dma_space() const
   { return _kern_dma_space; }
 
   virtual int set_managed_kern_dma_space(L4::Cap<L4::Task> s)
   {
     _kern_dma_space = s;
-    _managed_kern_dma_space = true;
     return 0;
   }
 
   virtual int create_managed_kern_dma_space() = 0;
   virtual int set_dma_space(bool set, L4::Cap<L4Re::Dma_space> dma_space);
-  virtual int set_dma_task(bool set, L4::Cap<L4::Task> dma_task) = 0;
   virtual ~Dma_domain_if() = default;
 };
 
@@ -103,8 +97,6 @@ private:
   }
 
 public:
-  int set_dma_task(bool, L4::Cap<L4::Task>) override;
-
   int create_managed_kern_dma_space() override;
 };
 

@@ -438,13 +438,8 @@ System_bus::assign_dma_domain(L4::Ipc::Iostream &ios)
         }
     }
 
-  int res;
   bool is_bind = flags & L4VBUS_DMAD_BIND;
-  if (flags & L4VBUS_DMAD_KERNEL_DMA_SPACE)
-    res = d->set_dma_task(is_bind, L4::cap_cast<L4::Task>(spc_cap));
-  else
-    res = d->set_dma_space(is_bind, L4::cap_cast<L4Re::Dma_space>(spc_cap));
-
+  int res = d->set_dma_space(is_bind, L4::cap_cast<L4Re::Dma_space>(spc_cap));
   if (res >= 0 && is_bind)
     server_iface()->realloc_rcv_cap(0);
 

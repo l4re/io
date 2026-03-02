@@ -179,8 +179,6 @@ enum L4vbus_dma_domain_assign_flags
   L4VBUS_DMAD_BIND   = 1,
   /** The given DMA space is an L4Re::Dma_space */
   L4VBUS_DMAD_L4RE_DMA_SPACE = 0,
-  /** The given DMA space is a kernel DMA space (L4::Task) */
-  L4VBUS_DMAD_KERNEL_DMA_SPACE = 2,
 };
 
 /**
@@ -192,10 +190,7 @@ enum L4vbus_dma_domain_assign_flags
  *                   vBUS is used.
  * \param flags      A combination of #L4vbus_dma_domain_assign_flags.
  * \param dma_space  The DMA space capability to bind or unbind, this must
- *                   either be an L4Re::Dma_space or a kernel \ref
- *                   l4_kernel_object_dmar_space (L4::Task created with
- *                   L4_PROTO_DMA_SPACE) and the type must be reflected in the
- *                   `flags`.
+ *                   be an L4Re::Dma_space.
  *
  * \retval 0           Operation completed successfully.
  * \retval -L4_ENOENT  The vbus does not support a global DMA domain or no DMA

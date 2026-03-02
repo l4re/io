@@ -288,9 +288,6 @@ class Dma_domain_phys : public Dma_domain
 public:
   int create_managed_kern_dma_space() override
   { return -L4_ENODEV; }
-
-  int set_dma_task(bool, L4::Cap<L4::Task>) override
-  { return -L4_ENODEV; }
 };
 
 class Iommu_dma_domain : public Dma_domain
@@ -346,53 +343,6 @@ public:
     if (r < 0)
       d_printf(DBG_ERR, "Error: Failed to create kernel-side DMA space: %d\n", r);
     return r;
-  }
-
-  int set_dma_task(bool set, L4::Cap<L4::Task> dma_task) override
-  {
-    if (managed_kern_dma_space())
-      return -EBUSY;
-
-    if (set && kern_dma_space())
-      return -EBUSY;
-
-    if (!set && !kern_dma_space())
-      return -L4_EINVAL;
-
-    static L4::Cap<L4::Task> const &me = L4Re::This_task;
-    if (!set && !me->cap_equal(kern_dma_space(), dma_task).label())
-      return -L4_EINVAL;
-
-    L4::Cap<L4::Iommu> iommu = L4Re::Env::env()->get_cap<L4::Iommu>("iommu");
-
-    if (set)
-      {
-        _kern_dma_space = dma_task;
-        auto cb = [this, iommu](l4_uint64_t src) -> int
-                    {
-                      return this->iommu_bind(iommu, src);
-                    };
-        int r = _src->enumerate_dma_src_ids(cb);
-        if (r < 0)
-          return r;
-      }
-    else
-      {
-        if (!_kern_dma_space)
-          return 0;
-
-        auto cb = [this, iommu](l4_uint64_t src) -> int
-                    {
-                      return this->iommu_unbind(iommu, src);
-                    };
-        int r = _src->enumerate_dma_src_ids(cb);
-        if (r < 0)
-          return r;
-
-        _kern_dma_space = L4::Cap<L4::Task>::Invalid;
-      }
-
-    return 0;
   }
 
 private:
