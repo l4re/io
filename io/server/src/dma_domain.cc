@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <l4/re/env>
 #include <l4/re/error_helper>
+#include <l4/sys/cxx/consts>
+#include <set>
 
 unsigned Dma_domain::_next_free_domain;
 bool Dma_domain_if::_supports_remapping;
@@ -60,6 +62,20 @@ Managed_dma_space::~Managed_dma_space()
 }
 
 
+char const *
+Dma_domain_if::resv_type_to_str(Resv_type type)
+{
+  switch (type)
+    {
+    case Resv_type::Identity_fixed:      return "fixed identity mapping";
+    case Resv_type::Identity_remappable: return "remapable identity mapping";
+    case Resv_type::Msi_window:          return "MSI controller window";
+    case Resv_type::Bridge_window:       return "P2P PCI bridge window";
+    }
+
+  return "unknown";
+}
+
 int
 Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
 {
@@ -81,11 +97,32 @@ Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
   if (int err = set_managed_dma_space(mds); err < 0)
     return err;
 
+  // Enumerate all required identity mappings and constraints. They have to be
+  // reserved in the Dma_space with the exception of
+  // Resv_type::Identity_remappable.
+
+  // TODO: implement 1:1 mappings
+  int err = enumerate_dma_reservations(
+    [dma_mgr, mds](Resv_type type, l4_uint64_t first, l4_uint64_t last)
+    {
+      first = L4::trunc_page(first); // block_area requires page alignment
+      d_printf(DBG_DEBUG2, "DMA: reserve 0x%llx-0x%llx, %s\n", first, last,
+               resv_type_to_str(type));
+      return dma_mgr->block_area(L4::Ipc::make_cap_rws(mds->dma_space()),
+                                 &first, L4::round_page(last - first + 1));
+    });
+  if (err < 0)
+    {
+      d_printf(DBG_DEBUG2, "DMA: enumerate_dma_reservations failed: %d\n", err);
+      clear_managed_dma_space();
+      return err;
+    }
+
   d_printf(DBG_DEBUG2, "DMA: associate managed DMA space (cap=%lx)\n",
            mds->dma_task().cap());
-  int err = dma_mgr->associate(L4::Ipc::make_cap_rws(mds->dma_space()),
-                               L4::Ipc::make_cap_rws(mds->dma_task()),
-                               L4Re::Dma_space_mgr::Space_attribs::None);
+  err = dma_mgr->associate(L4::Ipc::make_cap_rws(mds->dma_space()),
+                           L4::Ipc::make_cap_rws(mds->dma_task()),
+                           L4Re::Dma_space_mgr::Space_attribs::None);
   if (err < 0)
     {
       d_printf(DBG_DEBUG2, "DMA: associate failed: %d\n", err);
@@ -143,4 +180,41 @@ Dma_domain_set::clear_managed_dma_space()
 {
   for (auto d : _domains)
     d->clear_managed_dma_space();
+}
+
+int
+Dma_domain_set::enumerate_dma_reservations(Resv_cb cb) const
+{
+  // Gather in a region set first. Usually, all devices on the Vbus report the
+  // same constraints.
+  struct Region
+  {
+    Resv_type type;
+    l4_uint64_t first;
+    l4_uint64_t last;
+
+    bool operator<(Region const &o) const noexcept
+    { return type < o.type && first < o.first && last < o.last; }
+  };
+
+  std::set<Region> reserved;
+  auto gather = [&reserved](Resv_type type, l4_uint64_t first,
+                            l4_uint64_t last) -> int
+    {
+      reserved.emplace(Region{type, first, last});
+      return 0;
+    };
+
+  for (Dma_domain const *d : _domains)
+    {
+      int err = d->enumerate_dma_reservations(gather);
+      if (err < 0)
+        return err;
+    }
+
+  for (Region const &r : reserved)
+    if (int err = cb(r.type, r.first, r.last); err < 0)
+      return err;
+
+  return 0;
 }

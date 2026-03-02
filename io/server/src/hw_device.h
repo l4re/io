@@ -329,6 +329,13 @@ public:
    */
   virtual int enumerate_dma_src_ids(Dma_src_id_cb cb) const = 0;
 
+  /**
+   * Enumerate reserved DMA regions.
+   *
+   * Calls `cb` for each reserved DMA region of the device.
+   */
+  virtual int enumerate_dma_reservations(Dma_domain_if::Resv_cb cb) const = 0;
+
 protected:
   virtual ~Dma_src_feature() = default;
 };

@@ -288,6 +288,9 @@ class Dma_domain_phys : public Dma_domain
 public:
   int set_managed_dma_space(std::shared_ptr<Managed_dma_space>) override
   { return -L4_EPERM; }
+
+  int enumerate_dma_reservations(Dma_domain::Resv_cb) const override
+  { return 0; }
 };
 
 class Iommu_dma_domain : public Dma_domain
@@ -335,6 +338,9 @@ public:
 
     Dma_domain::clear_managed_dma_space();
   }
+
+  int enumerate_dma_reservations(Dma_domain::Resv_cb cb) const override
+  { return _src->enumerate_dma_reservations(cb); }
 
 private:
   int iommu_bind(L4::Cap<L4::Iommu> iommu, l4_uint64_t src)

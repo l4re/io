@@ -133,6 +133,11 @@ protected:
       return parent->enumerate_dma_src_ids(cb);
     }
 
+    int enumerate_dma_reservations(Dma_domain_if::Resv_cb) const override
+    {
+      return 0;
+    }
+
     Dev *parent;
   };
 

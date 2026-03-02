@@ -5,6 +5,7 @@
 #include <l4/sys/task>
 #include <l4/re/dma_space>
 #include <l4/re/util/unique_cap>
+#include <functional>
 #include <memory>
 
 class Dma_domain_set;
@@ -34,6 +35,32 @@ protected:
   static bool _supports_remapping;
 
 public:
+  /**
+   * Type of reserved memory region.
+   */
+  enum class Resv_type
+  {
+    Identity_fixed,       ///< Fixed, identity-mapped region.
+    Identity_remappable,  ///< Identity-mapped region that may be remapped.
+    Msi_window,           ///< Window to MSI controller
+    Bridge_window,        ///< A bridge window that may route P2P traffic
+  };
+
+  static char const *resv_type_to_str(Resv_type type);
+
+  /**
+   * Callback receiving reserved memory regions.
+   *
+   * \param type  The region type
+   * \param first The first byte in the region
+   * \param last  The last byte in the region (inclusive)
+   *
+   * \retval  >=0 Success
+   * \retval  <0  Failure. Stops further enumeration.
+   */
+  using Resv_cb = std::function<int(Resv_type type, l4_uint64_t first,
+                                    l4_uint64_t last)>;
+
   std::shared_ptr<Managed_dma_space> managed_dma_space() const
   { return _managed_dma_space; }
 
@@ -45,6 +72,8 @@ public:
 
   virtual int set_managed_dma_space(std::shared_ptr<Managed_dma_space> space);
   virtual void clear_managed_dma_space();
+
+  virtual int enumerate_dma_reservations(Resv_cb cb) const = 0;
 
   virtual ~Dma_domain_if() = default;
 };
@@ -119,6 +148,7 @@ private:
 public:
   int set_managed_dma_space(std::shared_ptr<Managed_dma_space> space) override;
   void clear_managed_dma_space() override;
+  int enumerate_dma_reservations(Resv_cb cb) const override;
 };
 
 class Dma_domain_group
