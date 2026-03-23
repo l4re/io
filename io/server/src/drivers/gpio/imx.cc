@@ -108,6 +108,7 @@ public:
   void handle_irq_both()
   {
     l4_uint32_t isr = _regs[GPIO_ISR] & _regs[GPIO_IMR];
+    l4_uint32_t clear_edge_bits = 0U;
 
     while (isr)
       {
@@ -119,13 +120,21 @@ public:
         else
           po->trigger();
 
+        if(po->mode() & L4_IRQ_F_LEVEL)
+          po->mask();
+        else
+          clear_edge_bits = 1U << p;
+
         isr &= ~(1 << p);
       }
+
+    _regs[GPIO_ISR] = clear_edge_bits;
   }
 
   void handle_irq()
   {
     handle_irq_both();
+    enable();
   }
 
 private:
@@ -150,6 +159,7 @@ public:
   void handle_irq()
   {
     _irq_svr->handle_irq_both();
+    enable();
   }
 
 private:
