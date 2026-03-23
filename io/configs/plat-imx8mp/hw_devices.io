@@ -82,6 +82,14 @@ Io.hw_add_devices(function()
         compatible    = { "fsl,imx6q-caam-sm" };
         Resource.reg0 = reg_mmio(0x00100000, 0x00008000);
       end) -- caam-sm@100000
+
+         -- /soc@0/bus@30000000/pinctrl@30330000 (3)
+         pinctrl_30330000 = Io.Hw.Iomuxc_imx8mp(function()
+            compatible    = { "fsl,imx8mp-iomuxc" };
+            Resource.reg0 = reg_mmio(0x30330000, 0x00010000);
+--            Resource.reg1 = reg_mmio(0x30340000, 0x00010000); -- gpr
+         end) -- pinctrl@30330000
+
          -- /soc@0/bus@30000000/gpio@30200000 (3)
          gpio0 = Io.Hw.Gpio_imx_chip(function()
            compatible    = { "fsl,imx8mp-gpio", "fsl,imx35-gpio" };
@@ -110,6 +118,63 @@ Io.hw_add_devices(function()
             Resource.irq0 = reg_irq(0x0, 0x46, 0x4);
             Resource.irq1 = reg_irq(0x0, 0x47, 0x4);
          end) -- gpio@30230000
+
+         -- FEC NIC Edevice resources
+         fec_phy_gpio = Io.Hw.Device(function()
+            Resource.pins = Io.Gpio_resource(gpio3, 0, 1)
+         end)
+
+         fec_pinctrl = Io.Hw.Iomux_dev(function()
+           Property.iomuxc = pinctrl_30330000
+           Property.pads = { 0x158, 0x3b8, 0x00, 0x04, 0x00, 0x40000044,
+                             0x15c, 0x3bc, 0x57c, 0x04, 0x01, 0x40000044,
+                             0x160, 0x3c0, 0x580, 0x04, 0x01, 0x90,
+                             0x164, 0x3c4, 0x584, 0x04, 0x01, 0x90,
+                             0x168, 0x3c8, 0x00, 0x04, 0x00, 0x90,
+                             0x16c, 0x3cc, 0x00, 0x04, 0x00, 0x90,
+                             0x174, 0x3d4, 0x00, 0x04, 0x00, 0x90,
+                             0x170, 0x3d0, 0x588, 0x04, 0x01, 0x90,
+                             0x178, 0x3d8, 0x00, 0x04, 0x00, 0x12,
+                             0x17c, 0x3dc, 0x00, 0x04, 0x00, 0x12,
+                             0x180, 0x3e0, 0x00, 0x04, 0x00, 0x12,
+                             0x184, 0x3e4, 0x00, 0x04, 0x00, 0x12,
+                             0x188, 0x3e8, 0x00, 0x04, 0x00, 0x12,
+                             0x18c, 0x3ec, 0x00, 0x04, 0x00, 0x14}
+         end)
+         fec_phy_pinctrl = Io.Hw.Iomux_dev(function()
+           Property.iomuxc = pinctrl_30330000
+           Property.pads = { 0x148, 0x3a8, 0x00, 0x05, 0x00, 0x100,
+                             0x14c, 0x3ac, 0x00, 0x05, 0x00, 0x1c0}
+         end)
+
+         -- EQOS/DWMAC NIC device resources
+         eqos_phy_gpio = Io.Hw.Device(function()
+           Resource.pins = Io.Gpio_resource(gpio3, 2, 3)
+         end)
+
+         eqos_pinctrl = Io.Hw.Iomux_dev(function()
+           Property.iomuxc = pinctrl_30330000
+           Property.pads = { 0x54, 0x2b4, 0x00, 0x00, 0x00, 0x40000044,
+                             0x58, 0x2b8, 0x590, 0x00, 0x01, 0x40000044,
+                             0x7c, 0x2dc, 0x00, 0x00, 0x00, 0x90,
+                             0x80, 0x2e0, 0x00, 0x00, 0x00, 0x90,
+                             0x84, 0x2e4, 0x00, 0x00, 0x00, 0x90,
+                             0x88, 0x2e8, 0x00, 0x00, 0x00, 0x90,
+                             0x78, 0x2d8, 0x00, 0x00, 0x00, 0x90,
+                             0x74, 0x2d4, 0x00, 0x00, 0x00, 0x90,
+                             0x68, 0x2c8, 0x00, 0x00, 0x00, 0x12,
+                             0x64, 0x2c4, 0x00, 0x00, 0x00, 0x12,
+                             0x60, 0x2c0, 0x00, 0x00, 0x00, 0x12,
+                             0x5c, 0x2bc, 0x00, 0x00, 0x00, 0x12,
+                             0x6c, 0x2cc, 0x00, 0x00, 0x00, 0x12,
+                             0x70, 0x2d0, 0x00, 0x00, 0x00, 0x14}
+         end)
+         eqos_phy_pinctrl = Io.Hw.Iomux_dev(function()
+           Property.iomuxc = pinctrl_30330000
+           Property.pads = { 0x150, 0x3b0, 0x00, 0x05, 0x00, 0x100,
+                             0x154, 0x3b4, 0x00, 0x05, 0x00, 0x1c0}
+         end)
+
          -- /soc@0/bus@30000000/gpio@30240000 (3)
          gpio4 = Io.Hw.Gpio_imx_chip(function()
             compatible    = { "fsl,imx8mp-gpio", "fsl,imx35-gpio" };
@@ -160,16 +225,6 @@ Io.hw_add_devices(function()
             Resource.reg0 = reg_mmio(0x302f0000, 0x00010000);
             Resource.irq0 = reg_irq(0x0, 0x35, 0x4);
          end) -- timer@302f0000
-         -- /soc@0/bus@30000000/pinctrl@30330000 (3)
-
-
-         pinctrl_30330000 = Io.Hw.Iomuxc_imx8mp(function()
-            compatible    = { "fsl,imx8mp-iomuxc" };
-            Resource.reg0 = reg_mmio(0x30330000, 0x00010000);
---            Resource.reg1 = reg_mmio(0x30340000, 0x00010000); -- gpr
-         end) -- pinctrl@30330000
-
-
          -- /soc@0/bus@30000000/syscon@30340000 (3)
          syscon_30340000 = Io.Hw.Device(function()
             compatible    = { "fsl,imx8mp-iomuxc-gpr", "syscon" };
