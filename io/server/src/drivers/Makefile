@@ -12,6 +12,7 @@ SRC_CC-$(CONFIG_L4IO_PCI)   += dwc_pcie_core.cc pcie_imx8.cc
 SRC_CC-$(CONFIG_L4IO_PCI_TEGRA_PCIE) += pcie_tegra194.cc
 
 SRC_CC-$(CONFIG_L4IO_SCU_IMX8QM) += scu_imx8qm.cc
-SRC_CC-$(CONFIG_L4IO_IOMUXC_IMX8MP) += iomuxc.cc i2c-ctrl.cc spi-ctrl.cc
+SRC_CC-$(CONFIG_L4IO_IOMUXC_IMX8MP) += iomuxc.cc i2c-ctrl.cc spi-ctrl.cc \
+                                       iomux_dev.cc
 
 include $(PKGDIR)/server/src/lib_subdir.mk
