@@ -459,11 +459,10 @@ Rcar3_pcie_bridge::alloc_msi_page(void **virt, l4_addr_t *phys)
   L4Re::chksys(dma_mgr->associate_phys(L4::Ipc::make_cap_rws(d.get()),
                                        L4Re::Dma_space_mgr::Space_attribs::None),
                "Associate DMA space for CPU physical");
-  l4_size_t phys_size;
+  L4Re::Dma_space::Dma_size phys_size = L4_PAGESIZE;
   L4Re::Dma_space::Dma_addr phys_ram = 0;
   L4Re::chksys(d->map(L4::Ipc::make_cap_rw(_ds_msi.get()), 0, &phys_size,
-                      L4Re::Dma_space::Attributes::None,
-                      L4Re::Dma_space::Bidirectional, &phys_ram),
+                      &phys_ram),
                "Map dataspace to DMA space");
   if (phys_ram < L4_PAGESIZE)
     throw(L4::Out_of_memory("not really"));
