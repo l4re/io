@@ -5,6 +5,7 @@
 #include <l4/re/env>
 #include <l4/re/error_helper>
 #include <l4/sys/cxx/consts>
+#include <l4/re/dma_space>
 #include <set>
 
 unsigned Dma_domain::_next_free_domain;
@@ -41,6 +42,45 @@ Dma_domain::add_to_group(Dma_domain_group *g)
   add_to_set(g->_set);
 }
 
+l4_ret_t
+Dma_domain_if::identity_map(std::shared_ptr<Managed_dma_space> mds,
+                            l4_uint64_t first, l4_uint64_t last)
+{
+  L4::Cap<L4::Task> myself(L4_BASE_TASK_CAP);
+  l4_uint64_t phys_addr = first;
+  l4_size_t size = L4::round_page(last - phys_addr + 1);
+  // Create a mapping of the physical memory into IO's virtual
+  // memory. This is required in order for the kernel to be able to
+  // create mappings.
+  l4_uint64_t virt_addr = res_map_iomem(first, size);
+  if (!virt_addr)
+    {
+      d_printf(DBG_ERR, "DMA: Could not map identity region\n");
+      return -L4_ENOMEM;
+    }
+  d_printf(DBG_INFO, "DMA: Identity mapping [0x%llx, 0x%llx]\n",
+           phys_addr, last);
+  while (size > 0)
+    {
+      unsigned order = L4::max_order(L4_PAGESHIFT,
+                                     virt_addr,
+                                     virt_addr,
+                                     virt_addr + size,
+                                     phys_addr);
+      l4_fpage_t fp = l4_fpage(virt_addr, order, L4_FPAGE_RWX);
+      auto ret = l4_error(mds->dma_task()->map(myself, fp, phys_addr));
+      if (ret)
+        {
+          d_printf(DBG_WARN, "DMA: Identity mapping failed: %d\n",
+                   ret);
+          return ret;
+        }
+      size -= (1UL << order);
+      phys_addr += (1UL << order);
+      virt_addr += (1UL << order);
+    }
+  return L4_EOK;
+}
 
 Managed_dma_space::Managed_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
 : _dma_space(std::move(dma_space)),
@@ -143,15 +183,38 @@ Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
   // reserved in the Dma_space with the exception of
   // Resv_type::Identity_remappable.
 
-  // TODO: implement 1:1 mappings
   int err = enumerate_dma_reservations(
-    [dma_mgr, mds](Resv_type type, l4_uint64_t first, l4_uint64_t last)
+    [this, dma_mgr, mds](Resv_type type, l4_uint64_t first, l4_uint64_t last)
     {
       first = L4::trunc_page(first); // block_area requires page alignment
       d_printf(DBG_DEBUG2, "DMA: reserve 0x%llx-0x%llx, %s\n", first, last,
                resv_type_to_str(type));
-      return dma_mgr->block_area(L4::Ipc::make_cap_rws(mds->dma_space()),
-                                 &first, L4::round_page(last - first + 1));
+      switch (type)
+        {
+        case Resv_type::Identity_remappable:
+          d_printf(DBG_WARN,
+                   "Remappable DMA reservations not fully supported yet. "
+                   "Treating like identity fixed ones.\n");
+          [[fallthrough]];
+        case Resv_type::Identity_fixed:
+          {
+            // An identity mapping (e.g. an RMRR) needs to be mapped into the
+            // dma_task directly, such that it is active once it is associated
+            // with the dma domain. We also need to make sure Moe does not
+            // allow to remap these mappings.
+            l4_ret_t ret = identity_map(mds, first, last);
+            if (ret)
+              return ret;
+          }
+          [[fallthrough]];
+        case Resv_type::Bridge_window:
+        case Resv_type::Msi_window:
+          return dma_mgr->block_area(L4::Ipc::make_cap_rws(mds->dma_space()),
+                                     &first, l4_round_page(last - first + 1));
+        default:
+          break;
+        }
+      return static_cast<l4_ret_t>(L4_EOK);
     });
   if (err < 0)
     {

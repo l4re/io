@@ -87,6 +87,10 @@ public:
   virtual int get_dma_limits(l4_uint64_t *min_addr, l4_uint64_t *max_addr) const = 0;
 
   virtual ~Dma_domain_if() = default;
+
+private:
+  l4_ret_t identity_map(std::shared_ptr<Managed_dma_space> mds,
+                        l4_uint64_t first, l4_uint64_t last);
 };
 
 class Dma_domain : public Resource, public Dma_domain_if
