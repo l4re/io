@@ -317,7 +317,15 @@ Dma_domain_set::enumerate_dma_reservations(Resv_cb cb) const
     l4_uint64_t last;
 
     bool operator<(Region const &o) const noexcept
-    { return type < o.type && first < o.first && last < o.last; }
+    {
+      if (type != o.type)
+        return type < o.type;
+
+      if (first != o.first)
+        return first < o.first;
+
+      return last < o.last;
+    }
   };
 
   std::set<Region> reserved;
