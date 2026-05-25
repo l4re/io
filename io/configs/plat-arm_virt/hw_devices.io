@@ -44,6 +44,9 @@ Io.hw_add_devices(function()
     Property.int_b        = 32 + 4
     Property.int_c        = 32 + 5
     Property.int_d        = 32 + 6
+
+    Property.iommu_map    = { 0x0, smmuv3, 0x0, 0x10000 }
+    Property.msi_map      = { 0x0, its, 0x0, 0x10000 }
   end);
 
   rtc = Hw.Device(function()

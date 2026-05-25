@@ -42,6 +42,12 @@
  *      #address-cells = <0x03>;
  *      device_type = "pci";
  *      compatible = "pci-host-ecam-generic";
+ *      iommu-map = <0x0000 &iommu0 0x4000 0x8000
+ *                   0x8000 &iommu1 0x8000 0x8000>;
+ *      iommu-map-mask = <0xfff8>;
+ *      msi-map = <0x0000 &msi_controller0 0x0000 0x8000,
+ *                 0x8000 &msi_controller1 0xa000 0x8000,>;
+ *      msi-map-mask = <0xfff8>;
  *  };
  * \endcode
  *
@@ -82,6 +88,29 @@
  *    Property.int_b        = 32 + 4
  *    Property.int_c        = 32 + 5
  *    Property.int_d        = 32 + 6
+ *
+ *    -- The iommu_map table holds 4 values for each mapping range. The
+ *    -- individual elements are:
+ *    --   1. Device ID input base
+ *    --   2. Reference to a Hw.Iommu device
+ *    --   3. Device ID output base
+ *    --   4. Number of Device IDs in mapping range
+ *    -- We always assume #iommu-cells = 1.
+ *    -- In case the iommu node in your Devicetree has zero cells, just pass a
+ *    -- placeholder of 0 as Device ID output base.
+ *    -- In case the iommu node in your Devicetree has two cells, combine the
+ *    -- two 32-bit cells into one 64-bit Device ID output base.
+ *    Property.iommu_map    = { 0x0000, iommu0, 0x4000, 0x8000,
+ *                              0x8000, iommu1, 0x8000, 0x8000 }
+ *    Property.iommu_map_mask = 0xfff8
+ *
+ *    -- The msi_map table has the same structure as iommu_map.
+ *    -- We always assume #msi-cells = 1.
+ *    -- In case the iommu node in your Devicetree has zero cells, just pass a
+ *    -- placeholder of 0 as Device ID output base.
+ *    Property.msi_map      = { 0x0000, msi_controller0, 0x0000, 0x8000,
+ *                              0x8000, msi_controller1, 0xa000, 0x8000 }
+ *    Property.msi_map_mask = 0xfff8
  *  end)
  * \endcode
  */
@@ -90,9 +119,104 @@
 
 #include "hw_device.h"
 #include <pci-root.h>
+#include "iommu.h"
+#include "msi_controller.h"
 #include "resource_provider.h"
 
 namespace {
+
+template<typename TRANSLATOR>
+class Map_property : public Property
+{
+public:
+  enum : l4_uint64_t { Translation_failed = ~l4_uint64_t{0} };
+
+  int set(int, std::string const &) override { return -EINVAL; }
+
+  // TODO: Maybe check that all mappings were initialized properly (count set()
+  //       calls, ensure k increments by 1 between each call and the number of
+  //       calls is a multiple of Num_cells).
+
+  int set(int k, l4_int64_t val) override
+  {
+    if (k < 1 || val < 0)
+      return -EINVAL;
+
+    // lua tables start at index 1
+    unsigned index = k - 1;
+    unsigned mapping_index = index / Num_cells;
+    if (mapping_index >= _mappings.size())
+      _mappings.resize(mapping_index + 1);
+    auto &mapping = _mappings[mapping_index];
+
+    switch (index % Num_cells)
+      {
+      case 0: mapping.in_base = val; break;
+      case 1: return -EINVAL;
+      case 2: mapping.out_base = val; break;
+      case 3: mapping.length = val; break;
+      }
+
+    return 0;
+  }
+  int set(int k, Generic_device *val) override
+  {
+    if (k < 1)
+      return -EINVAL;
+
+    // lua tables start at index 1
+    unsigned index = k - 1;
+    if ((index % Num_cells) != 1)
+      return -EINVAL;
+
+    TRANSLATOR *translator = dynamic_cast<TRANSLATOR *>(val);
+    if (!translator)
+      return -EINVAL;
+
+    unsigned mapping_index = index / Num_cells;
+    if (mapping_index >= _mappings.size())
+      return -EINVAL;
+    _mappings[mapping_index].translator = translator;
+
+    return 0;
+  }
+
+  int set(int, Resource *) override { return -EINVAL; }
+
+  l4_uint64_t translater_requester_id(l4_uint64_t requester_id) const
+  {
+    for (auto const &m : _mappings)
+      {
+        if (requester_id < m.in_base || requester_id >= m.in_base + m.length)
+          continue;
+
+        l4_uint64_t device_id = requester_id + m.out_base - m.in_base;
+        return m.translator->translate_device_id(device_id);
+      }
+
+    return Translation_failed;
+  }
+
+  bool present() const { return _mappings.size() > 0; }
+
+private:
+  static constexpr unsigned Num_cells = 4;
+
+  // Maps any device ID in the interval [in_base, in_base + length] to a source
+  // ID via `translator->translate_device_id(device_id - in_base + out_base)`.
+  struct Mapping
+  {
+    l4_uint32_t in_base;
+    TRANSLATOR *translator;
+    l4_uint64_t out_base;
+    l4_uint32_t length; // number of IDs in the range
+  };
+
+  std::vector<Mapping> _mappings;
+};
+
+using Iommu_map_property = Map_property<Hw::Iommu>;
+using Msi_map_property = Map_property<Hw::Msi_controller>;
 
 class Ecam_pcie_bridge
 : public Hw::Device,
@@ -121,6 +245,10 @@ public:
     register_property("int_b", &_int_map[1]);           // optional
     register_property("int_c", &_int_map[2]);           // optional
     register_property("int_d", &_int_map[3]);           // optional
+    register_property("iommu_map", &_iommu_map);        // optional, no DMA mapping if not present
+    register_property("iommu_map_mask", &_iommu_map_mask); // optional
+    register_property("msi_map", &_msi_map);            // optional, no MSI mapping if not present
+    register_property("msi_map_mask", &_msi_map_mask);  // optional
   }
 
   typedef Hw::Pci::Cfg_addr Cfg_addr;
@@ -132,6 +260,87 @@ public:
   int cfg_write(Cfg_addr addr, l4_uint32_t value, Cfg_width) override;
 
   int int_map(int i) const { return _int_map[i]; }
+
+  int pci_enum_dma_reservations(Hw::Pci::If *, Hw::Pci::Dma_requester_id,
+                                Dma_domain_if::Resv_cb) const override
+  {
+    return 0;
+  }
+
+  int translate_msi_src(Hw::Pci::If *dev, l4_uint64_t *si) override
+  {
+    if (!_msi_map.present())
+      return -L4_ENODEV;
+
+    // Start from a standard PCI requester ID.
+    l4_uint64_t src = (unsigned{dev->bus_nr()} << 8) | dev->devfn();
+
+    /*
+     * We don't care about DMA requester ID aliasing. The assumption is that
+     * there are no legacy bridges. If we ever have one, we will have a fun time
+     * here to figure out which is the correct alias or, even worse, support
+     * multiple aliases.
+     */
+
+    src = _msi_map.translater_requester_id(src & _msi_map_mask);
+    if (src == Msi_map_property::Translation_failed)
+      {
+        d_printf(DBG_ERR, "%s: untranslatable MSI source: %02x:%02x.%d\n",
+                 name(), dev->bus_nr(), dev->device_nr(), dev->function_nr());
+        return -L4_ENODEV;
+      }
+
+    *si = src;
+    return 0;
+  }
+
+  int translate_dma_src(Hw::Pci::Dma_requester_id rid, l4_uint64_t *si) const override
+  {
+    if (!_iommu_map.present())
+      return -L4_ENODEV;
+
+    // Start from a standard PCI requester ID according.
+    l4_uint64_t src = (unsigned{rid.bus()} << 8) | rid.devfn();
+
+    src = _iommu_map.translater_requester_id(src & _iommu_map_mask);
+    if (src == Iommu_map_property::Translation_failed)
+      {
+        d_printf(DBG_ERR, "%s: untranslatable DMA source: %04x:%02x:%02x.%u\n",
+                 name(), rid.segment().get(), rid.bus().get(), rid.dev().get(),
+                 rid.fn().get());
+        return -L4_ENODEV;
+      }
+
+    *si = src;
+    return 0;
+  }
+
+  int map_msi_src(::Hw::Pci::If *dev, l4_uint64_t msi_addr_phys,
+                  l4_uint64_t *msi_addr_iova) override
+  {
+    Dma_domain *d = dev->host()->dma_domain();
+    if (!d)
+      return -L4_ENODEV;
+
+    // Without IOMMU we must return the actual physical address.
+    if (!d->supports_remapping())
+      {
+        *msi_addr_iova = msi_addr_phys;
+        return 0;
+      }
+
+    std::shared_ptr<Managed_dma_space> mds = d->managed_dma_space();
+    if (!mds)
+      // Apparently, the client did not yet attach the DMA space...
+      return -L4_ENODEV;
+
+    int res = mds->get_msi_mapping(msi_addr_phys, msi_addr_iova);
+    if (res < 0)
+      d_printf(DBG_ERR, "%s: get_msi_mapping() failed: %d, phys=0x%llx\n",
+               name(), res, msi_addr_phys);
+
+    return res;
+  }
 
 private:
   int host_init();
@@ -147,6 +356,18 @@ private:
   Int_property _mmio_base_64{~0};
   Int_property _mmio_size_64{~0};
   Int_property _int_map[4];
+  // Maps a PCI requester ID to an IOMMU and source ID identifying the device at
+  // the IOMMU.
+  Iommu_map_property _iommu_map;
+  // Mask to apply to PCI requester ID before mapping via _iommu_map.
+  // (maximum and default value is 0xffff)
+  Int_property _iommu_map_mask = 0xffffU;
+  // Maps a PCI requester ID to an MSI controller and source ID identifying the
+  // device at the MSI controller.
+  Msi_map_property _msi_map;
+  // Mask to apply to PCI requester ID before mapping via _msi_map.
+  // (maximum and default value is 0xffff)
+  Int_property _msi_map_mask = 0xffffU;
 
   // PCI root bridge core memory. (Currently) not used.
   L4drivers::Register_block<32> _regs;
