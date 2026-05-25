@@ -443,10 +443,13 @@ public:
   }
 
   int pci_enum_dma_reservations(Hw::Pci::If *, Hw::Pci::Dma_requester_id,
-                                Dma_domain_if::Resv_cb) const override
+                                Dma_domain_if::Resv_cb cb) const override
   {
     // TODO: report RMRRs applicable to the device
-    return 0;
+
+    // APIC registers are treated by the interrupt remapping tables. There must
+    // be no DMA mappings in this range.
+    return cb(Dma_domain_if::Resv_type::Msi_window, 0xfee0'0000, 0xfeef'ffff);
   }
 };
 
