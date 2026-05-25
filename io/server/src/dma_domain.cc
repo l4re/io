@@ -52,13 +52,13 @@ Managed_dma_space::Managed_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma
 
 Managed_dma_space::~Managed_dma_space()
 {
-  auto dma_mgr =
-    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
-                 "Get DMA space manager cap from env");
-
-  int ret = dma_mgr->disassociate(L4::Ipc::make_cap_rws(_dma_space.get()));
-  if (ret < 0)
-    d_printf(DBG_ERR, "Could not disassociate: %d\n", ret);
+  auto dma_mgr = L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr");
+  if (dma_mgr)
+    {
+      int ret = dma_mgr->disassociate(L4::Ipc::make_cap_rws(_dma_space.get()));
+      if (ret < 0)
+        d_printf(DBG_ERR, "Could not disassociate: %d\n", ret);
+    }
 }
 
 l4_ret_t
@@ -80,7 +80,7 @@ Managed_dma_space::get_msi_mapping(l4_uint64_t phys, l4_uint64_t *iova)
 
   auto dma_mgr = L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr");
   if (!dma_mgr)
-    return -L4_ENOMEM;
+    return -L4_ENOSYS;
 
   L4Re::Dma_space::Dma_addr dma_addr = L4_PAGESIZE; // avoid 0
   l4_ret_t res = dma_mgr->block_area(L4::Ipc::make_cap_rws(_dma_space.get()),
@@ -122,7 +122,7 @@ Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
 {
   auto dma_mgr =
     L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
-                 "Get DMA space manager cap from env");
+                 "Get DMA space manager cap from env", -L4_ENOSYS);
 
   if (!_supports_remapping)
     {

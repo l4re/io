@@ -97,7 +97,7 @@ void Mmio_data_space::alloc_ram(Size size, unsigned long alloc_flags)
     {
       auto dma_mgr =
         L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma_mgr"),
-                     "Get DMA space manager cap");
+                     "Get DMA space manager cap", -L4_ENOSYS);
       auto uf = L4Re::Env::env()->user_factory();
       auto d = L4Re::chkcap(L4Re::Util::make_unique_cap<L4Re::Dma_space>());
       L4Re::chksys(uf->create(d.get()));

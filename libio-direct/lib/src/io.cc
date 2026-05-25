@@ -193,9 +193,9 @@ static int alloc_anon_ram_resources()
   if (int r = l4_error(uf->create(_dma_space)))
     return r;
 
-  auto dma_mgr =
-    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma-mgr"),
-                 "Get DMA space manager cap");
+  auto dma_mgr = L4Re::Env::env()->get_cap<L4Re::Dma_space_mgr>("dma-mgr");
+  if (!dma_mgr)
+    return -L4_ENOSYS;
 
   if (int r = dma_mgr->associate_phys(L4::Ipc::make_cap_rws(_dma_space),
                                       L4Re::Dma_space_mgr::Space_attribs::None))
