@@ -51,7 +51,7 @@ SRC_CC := main.cc res.cc phys_space.cc resource.cc hw_device.cc \
           virt/gpio/vgpio.cc \
           inhibitor_mux.cc \
           platform_control.cc \
-          iommu.cc
+          iommu.cc msi_controller.cc
 
 # WARNING EXCEPTION: This is auto generated code and thus the code may contain
 # variables that are set but never read.

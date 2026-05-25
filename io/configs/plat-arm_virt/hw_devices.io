@@ -22,6 +22,10 @@ Io.hw_add_devices(function()
     Property.idx = 0;
   end);
 
+  its = Hw.Msi_controller(function()
+    Property.idx = 0;
+  end);
+
   pciec0 = Io.Hw.Ecam_pcie_bridge(function()
     -- QEMU: VIRT_PCIE_MMIO / VIRT_HIGH_PCIE_MMIO
     Property.regs_base    = 0x10000000
