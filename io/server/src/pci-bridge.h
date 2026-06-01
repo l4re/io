@@ -199,6 +199,9 @@ public:
   void setup_children(Hw::Device *host) override;
   void discover_resources(Hw::Device *host) override;
   Dma_requester_id dma_alias() const override;
+
+protected:
+  int reserve_dma_resources(Dma_domain_if::Resv_cb const &cb) const override;
 };
 
 } }

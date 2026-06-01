@@ -111,6 +111,7 @@ public:
 
   virtual int enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const;
   virtual int enumerate_dma_reservations(Dev *dev, Dma_domain_if::Resv_cb cb) const;
+  virtual int reserve_dma_resources(Dma_domain_if::Resv_cb const &cb) const;
 
   void add_saved_cap(Saved_cap *cap) { _saved_state.add_cap(cap); }
 
@@ -142,6 +143,8 @@ protected:
     Dev *parent;
   };
 
+  int enumerate_peer_dma_reservations(Dma_domain_if::Resv_cb cb) const;
+
   Pci_dma_src_feature _dma_src_feature;
   Hw::Device *_host;
   Bridge_if *_bridge = nullptr;
@@ -156,6 +159,19 @@ private:
   Resource *_rom;
 
   Transparent_msi *_transp_msi = 0;
+
+  /**
+   * Is "ACS Upstream Forwarding" active on the port?
+   *
+   * Implicitly enabled on root ports because they are already at the root of
+   * the hierarchy and all requests are P2P. It would make a difference if we
+   * would allow ATS, but this is fortunately not the case.
+   */
+  bool _acs_upstream_fwd = false;
+
+  /// Is "ACS P2P Request Redirect" _and_ "ACS P2P Completion Redirect" enabled
+  /// on the port?
+  bool _acs_p2p_redirect = false;
 
   Saved_config _saved_state;
 
@@ -217,6 +233,14 @@ public:
     for (unsigned i = 0; i < sizeof(_bars)/sizeof(_bars[0]); ++i)
       _bars[i] = 0;
     host->add_feature(&_dma_src_feature);
+
+    // PCIe root ports do not need to implement the "ACS Upstream Forwarding"
+    // feature. As they are at the root of the hierarchy and we don't support
+    // ATS, we can be safely imply the behaviour of not reflecting traffic.
+    if (   cfg.base_class() == 0x6                // bridge
+        && cfg.sub_class()  == 0x4                // PCI-to-PCI bridge
+        && cfg.pcie_cap && cfg.pcie_type == 0x4)  // PCIe root port
+      _acs_upstream_fwd = true;
   }
 
   Bridge_if *bridge() const override final { return _bridge; }
@@ -286,6 +310,9 @@ public:
 
   unsigned segment_nr() const override
   { return bridge()->segment(); }
+
+  bool acs_upstream_fwd() const { return _acs_upstream_fwd; }
+  bool acs_p2p_redirect() const { return _acs_p2p_redirect; }
 
 protected:
   void discover_pci_caps();

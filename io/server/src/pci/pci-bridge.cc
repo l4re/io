@@ -91,26 +91,28 @@ int
 Bridge::pci_enum_dma_reservations(If *dev, Dma_requester_id rid,
                                   Dma_domain_if::Resv_cb cb) const
 {
+  // The handling here is for all bridges *except* root bridges. The
+  // Root_bridge class directly forwards the enumeration to the platform
+  // adapter because most of the root bridge behaviour is imlementation
+  // defined. See Hw::Pci::Root_bridge::pci_enum_dma_reservations().
+
+  // There should be no way this could happen! But play safe...
+  if (!bridge())
+    return -L4_ENODEV;
+
+  // Report applicable sibling devices or bridges if we can generate P2P
+  // traffic to them.
+  if (int err = enumerate_peer_dma_reservations(cb); err < 0)
+    return err;
+
   // Does this bridge create aliases? If yes, override the DMA requester ID of
   // the downstream device for further reporting.
   Dma_requester_id alias = dma_alias();
   if (alias)
     rid = alias;
 
-  // TODO: report all resouces that may cause P2P traffic:
-  // 1. On a legacy PCI bridge: everything on and below this bridge except
-  //    `dev`.
-  // 2. On PCIe downstream ports:
-  //  a) Unless "ACS Upstream Forwarding" is enabled: everything below this
-  //     port, except `dev`.
-  //  b) Unless "ACS P2P Request Redirect" and "ACS P2P Completion Redirect"
-  //     are enabled, all devices reachable through sibling downstream ports.
-
   // Pass upwards for additional memory windows or RMRRs in root bridge.
-  if (auto *b = bridge())
-    return b->pci_enum_dma_reservations(dev, rid, cb);
-  else
-    return -L4_ENODEV;
+  return bridge()->pci_enum_dma_reservations(dev, rid, cb);
 }
 
 int
@@ -264,6 +266,24 @@ Bridge::dma_alias() const
   return Dma_requester_id::rewrite(segment_nr(), bus_nr(), devfn());
 }
 
+int
+Bridge::reserve_dma_resources(Dma_domain_if::Resv_cb const &cb) const
+{
+  if (!mmio->empty() && mmio->valid())
+    if (int err = cb(Dma_domain_if::Resv_type::Bridge_window, mmio->start(),
+                     mmio->end());
+        err < 0)
+      return err;
+
+  if (!pref_mmio->empty() && pref_mmio->valid())
+    if (int err = cb(Dma_domain_if::Resv_type::Bridge_window,
+                     pref_mmio->start(), pref_mmio->end());
+        err < 0)
+      return err;
+
+  return 0;
+}
+
 class Pcie_downstream_port : public Bridge
 {
 private:
@@ -347,6 +367,19 @@ public:
 
   Dma_requester_id dma_alias() const override
   { return Dma_requester_id(); }
+
+  int pci_enum_dma_reservations(If *dev, Dma_requester_id rid,
+                                Dma_domain_if::Resv_cb cb) const override
+  {
+    // PCIe switches are special in that they can "reflect" traffic back
+    // downstream from where the traffic came. Unless "ACS Upstream Forwarding"
+    // is enabled, we need to report the whole bridge window to prevent that.
+    if (!acs_upstream_fwd())
+      if (int err = reserve_dma_resources(cb); err < 0)
+        return err;
+
+    return Bridge::pci_enum_dma_reservations(dev, rid, cb);
+  }
 };
 
 class Pcie_upstream_port : public Bridge

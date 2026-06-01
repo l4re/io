@@ -204,6 +204,9 @@ public:
   virtual bool ari_forwarding_enabled() const = 0;
   virtual unsigned segment() const = 0;
   virtual Dma_requester_id dma_alias() const = 0;
+
+  bool is_root_bridge() const
+  { return parent_bridge() == nullptr; }
 };
 
 class Transparent_msi

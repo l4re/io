@@ -139,10 +139,6 @@ Dev::enumerate_dma_src_ids(Dma_src_feature::Dma_src_id_cb cb) const
 int
 Dev::enumerate_dma_reservations(Dev *dev, Dma_domain_if::Resv_cb cb) const
 {
-  // TODO: Report resources of other sibling devices/functions if:
-  //   a) this device is part of a multi-function device / SR-IOV device, and
-  //   b) "ACS P2P Request Redirect" is not enabled.
-
   // There are no constraints related to devices themselves. They all come from
   // the PCI(e) topology (to prevent peer-to-peer traffic), the IOMMU itself
   // (min/max DMA address) or firmware declared reserved memory regions. So we
@@ -150,8 +146,91 @@ Dev::enumerate_dma_reservations(Dev *dev, Dma_domain_if::Resv_cb cb) const
   if (!_bridge)
     return -L4_ENODEV;
 
+  if (int err = enumerate_peer_dma_reservations(cb); err < 0)
+    return err;
+
+  // Pass upwards for additional memory windows or RMRRs in root bridge.
   auto src = Dma_requester_id::source(segment_nr(), bus_nr(), devfn());
   return _bridge->pci_enum_dma_reservations(dev, src, cb);
+}
+
+/**
+ * Report resources of other sibling bridges/devices/functions if "ACS P2P
+ * Request Redirect" is not enabled.
+ *
+ * There are the following cases that are significant:
+ *
+ *  * Sibling PCIe downstream ports. Unless "ACS P2P Request Redirect" and "ACS
+ *    P2P Completion Redirect" are enabled, a PCIe switch will route the
+ *    requests directly to matching downstream ports.
+ *  * Other devices/bridges on a legacy PCI bus. As a shared bus, all devices
+ *    will see transactions and acknowledge them if they match their BARs.
+ *  * SR-IOV virtual functions. They are allowed to talk to each other,
+ *    unless ACS request redirect is enabled. They are visible as sibling
+ *    PCIe devices.
+ *  * Other functions of a multi-function device. Except for SR-IOV virtual
+ *    functions and RCiEP devices, this is the only case where we'll ever see
+ *    sibling devices on PCIe. The reason for this is that PCIe has a
+ *    point-to-point tree topology, thus a single-function device will never
+ *    see any siblings.
+ *
+ * Thus, we just have to scan for sibling PCI(e) devices. If we find any,
+ * reserve their resources.
+ */
+int
+Dev::enumerate_peer_dma_reservations(Dma_domain_if::Resv_cb cb) const
+{
+  if (acs_p2p_redirect())
+    return 0;
+
+  Hw::Device *myself = host();
+  bool on_root_bridge = bridge()->is_root_bridge();
+  for (Hw::Device *i = myself->parent()->children(); i; i = i->next())
+    {
+      // PCI(e) functions never talk to themselves. So DMA accesses for
+      // regions that fall into the device BARs will always hit the bridge.
+      if (i == myself)
+        continue;
+
+      Hw::Pci::Dev *sibling = i->find_feature<Hw::Pci::Dev>();
+      if (!sibling)
+        continue;
+
+      // Devices on the root bridge are handled specially. Linux (and we
+      // as well) assume that there is no P2P traffic between devices on the
+      // root bridge. Multi-function devices could still have internal traffic,
+      // though.
+      //
+      // This is technically wrong for PCI root bridges. But as a platform with
+      // legacy PCI is not expected to sport an IOMMU, the reporting would be
+      // pointless, though.
+      //
+      // SR-IOV devices will be below a PCIe root/downstream port. So we are
+      // guaranteed to not skip them.
+      if (on_root_bridge && device_nr() != sibling->device_nr())
+        continue;
+
+      // This sibling seems to be reachable from this device. Report it...
+      if (int err = sibling->reserve_dma_resources(cb); err < 0)
+        return err;
+    }
+
+  return 0;
+}
+
+int
+Dev::reserve_dma_resources(Dma_domain_if::Resv_cb const &cb) const
+{
+  // Report all MMIO resources of the device. This includes all BARs and
+  // potentially the expansion ROM.
+  for (Resource const *r : *_host->resources())
+    if (r->type() == Resource::Mmio_res)
+      if (int err = cb(Dma_domain_if::Resv_type::Device_mmio, r->start(),
+                       r->end());
+          err < 0)
+        return err;
+
+  return 0;
 }
 
 l4_uint32_t
