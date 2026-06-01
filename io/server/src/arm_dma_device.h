@@ -12,6 +12,8 @@ namespace Hw {
    *   - sid     stream ID of the device
    *
    * Only a single stream ID is supported.
+   *
+   * \deprecated Use Hw::Iommu_dma_device.
    */
   class Arm_dma_device : public Device, public Dma_src_feature
   {
