@@ -43,8 +43,9 @@ AcpiOsInstallInterruptHandler (
     ACPI_OSD_HANDLER          service_routine,
     void                      *context)
 {
+  auto *env = L4Re::Env::env();
   int err;
-  L4::Cap<L4::Icu> icu = L4Re::Env::env()->get_cap<L4::Icu>("icu");
+  L4::Cap<L4::Icu> icu = env->get_cap<L4::Icu>("icu");
   if (!icu)
     {
       d_printf(DBG_ERR, "error: could not find ICU capability.\n");
@@ -52,11 +53,21 @@ AcpiOsInstallInterruptHandler (
     }
 
   Acpi_sci *sci = new Acpi_sci(service_routine, context, interrupt_number);
-  L4::Cap<L4::Irq> irq = irq_queue()->register_irq_obj(sci);
-  if (!irq.is_valid())
+  auto irq = L4Re::Util::make_shared_cap<L4::Irq>();
+  if (!irq)
+    {
+      d_printf(DBG_ERR, "error: out of caps\n");
+      return AE_NO_MEMORY;
+    }
+  if ((err = l4_error(env->factory()->create(irq.get()))) < 0)
+    {
+      d_printf(DBG_ERR, "error: could not create L4::Irq: %d\n", err);
+      return AE_NO_MEMORY;
+    }
+  if (!irq_queue()->register_obj(sci, irq.get()).is_valid())
     {
       d_printf(DBG_ERR, "error: could not register ACPI event server\n");
-      return AE_BAD_PARAMETER;
+      return AE_NO_MEMORY;
     }
 
   if ((err = sci->bind(irq, L4_IRQ_F_NONE)) < 0)

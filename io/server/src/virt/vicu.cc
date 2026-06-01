@@ -27,10 +27,6 @@
 
 namespace Vi {
 
-using L4Re::Util::Ref_cap;
-using L4Re::chksys;
-using L4Re::chkcap;
-
 Sw_icu::Sw_icu()
 {
   add_feature(this);
@@ -329,8 +325,8 @@ Sw_icu::Sw_irq_pin::bind(L4::Cap<void> rc)
   if (bound())
     return -L4_EPERM;
 
-  Triggerable irq =
-    chkcap(L4Re::Util::cap_alloc.alloc<L4::Triggerable>(), "allocating IRQ capability");
+  auto irq = L4Re::chkcap(L4Re::Util::make_shared_cap<L4::Triggerable>(),
+                          "allocating IRQ capability");
 
   irq.get().move(L4::cap_cast<L4::Triggerable>(rc));
 
@@ -353,7 +349,7 @@ Sw_icu::Sw_irq_pin::_unbind(bool deleted)
   if (_master->sw_irqs() == 0)
     _master->unbind(deleted);
 
-  _irq = L4::Cap<L4::Irq>::Invalid;
+  _irq.reset();
   _state &= S_user_mask;
   return err;
 }

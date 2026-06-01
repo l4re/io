@@ -16,7 +16,7 @@
 
 #include <l4/vbus/vbus>
 
-#include <l4/re/util/cap_alloc>
+#include <l4/re/util/shared_cap>
 
 #include "irqs.h"
 #include "vdevice.h"
@@ -106,7 +106,7 @@ private:
     unsigned _state;
     unsigned _irqn;
     Io_irq_pin *_master;
-    typedef  L4Re::Util::Ref_cap<L4::Triggerable>::Cap Triggerable;
+    using Triggerable = L4Re::Util::Shared_cap<L4::Triggerable>;
     Triggerable _irq;
 
     int _direct_bind(Triggerable const &irq);

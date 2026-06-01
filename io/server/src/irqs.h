@@ -11,7 +11,7 @@
 #include <l4/cxx/bitfield>
 #include <l4/cxx/hlist>
 #include <l4/cxx/bitmap>
-#include <l4/re/util/cap_alloc>
+#include <l4/re/util/shared_cap>
 #include "main.h"
 
 class Io_irq_pin
@@ -21,7 +21,7 @@ public:
   {
     F_shareable = 0x1,
   };
-  typedef L4Re::Util::Ref_cap<L4::Triggerable>::Cap Triggerable;
+  using Triggerable = L4Re::Util::Shared_cap<L4::Triggerable>;
 
 private:
   int _sw_irqs;
@@ -38,7 +38,7 @@ public:
       _flags &= ~flags;
   }
 
-  Triggerable const &irq() const { return _irq; }
+  Triggerable irq() const { return _irq; }
 
   Io_irq_pin() : _sw_irqs(0), _irq(), _flags(0), _max_sw_irqs(0) {}
 
@@ -93,7 +93,7 @@ public:
 inline Io_irq_pin::~Io_irq_pin() {}
 inline int Io_irq_pin::unbind(bool)
 {
-  _irq = L4::Cap_base::Invalid;
+  _irq.reset();
   return 0;
 }
 
