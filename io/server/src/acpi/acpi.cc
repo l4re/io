@@ -416,7 +416,7 @@ static int acpi_enter_sleep(int sleepstate = 3 /* s3 */)
   ACPI_STATUS status = AcpiGetSleepTypeData(sleepstate, &sleeptypea, &sleeptypeb);
   if (ACPI_FAILURE(status))
     {
-      d_printf(DBG_ERR, "error: cannot determining ACPI sleep type\n");
+      d_printf(DBG_ERR, "error: cannot determine ACPI sleep type\n");
       return -L4_ENODEV;
     }
 
