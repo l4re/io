@@ -19,7 +19,14 @@ struct Iort_node
 {
   enum : l4_uint64_t { Translation_failed = ~(l4_uint64_t)0 };
 
+  explicit Iort_node(ACPI_IORT_NODE const *node) : _acpi_node(node) {}
   virtual ~Iort_node() = default;
+
+  /**
+   * The underlying ACPI IORT node. Used as a stable identity for matching
+   * against RMR mapping targets.
+   */
+  ACPI_IORT_NODE const *acpi_node() const { return _acpi_node; }
 
   /**
    * Do the translation for ITS Device-IDs.
@@ -40,6 +47,9 @@ struct Iort_node
    */
   static Iort_node *parse_mappings(ACPI_TABLE_IORT *iort, ACPI_IORT_NODE *node,
                                    ACPI_TABLE_MADT *madt);
+
+private:
+  ACPI_IORT_NODE const *_acpi_node;
 };
 
 /**
@@ -94,6 +104,7 @@ public:
   }
 
   Translator(ACPI_TABLE_IORT *iort, ACPI_IORT_NODE *node, ACPI_TABLE_MADT *madt)
+  : Iort_node(node)
   {
     _mappings.reserve(node->MappingCount);
 
@@ -153,7 +164,8 @@ private:
  */
 struct Its : public Iort_node
 {
-  explicit Its(unsigned idx) : _idx(idx) {}
+  Its(unsigned idx, ACPI_IORT_NODE const *node)
+  : Iort_node(node), _idx(idx) {}
 
   l4_uint64_t translate_device_id(l4_uint64_t src) const override
   {
@@ -246,7 +258,7 @@ Iort_node::parse_mappings(ACPI_TABLE_IORT *iort, ACPI_IORT_NODE *node,
         if (idx < 0)
           return nullptr;
 
-        return new Its(idx);
+        return new Its(idx, node);
       }
 
     case ACPI_IORT_NODE_SMMU:
