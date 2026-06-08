@@ -4,8 +4,13 @@
  * Author(s): Jan Klötzke <jan.kloetzke@kernkonzept.com>
  */
 
+#include <functional>
+#include <limits>
 #include <map>
+#include <set>
 #include <vector>
+
+#include <l4/sys/cxx/consts>
 
 #include "debug.h"
 #include "io_acpi.h"
@@ -18,6 +23,15 @@ namespace {
 struct Iort_node
 {
   enum : l4_uint64_t { Translation_failed = ~(l4_uint64_t)0 };
+
+  /**
+   * Callback invoked by walk_rmr_path() for each node visited.
+   *
+   * \param node The ACPI IORT node visited.
+   * \param id   The input ID at this node.
+   */
+  using Walk_rmr_cb = std::function<void(Iort_node const &node,
+                                         l4_uint64_t id)>;
 
   explicit Iort_node(ACPI_IORT_NODE const *node) : _acpi_node(node) {}
   virtual ~Iort_node() = default;
@@ -41,6 +55,16 @@ struct Iort_node
    * \return Stream-ID or Translation_failed on error.
    */
   virtual l4_uint64_t translate_stream_id(l4_uint64_t src) const = 0;
+
+  /**
+   * Walk the IORT path that `src` takes when entering this node to find RMR
+   * nodes.
+   *
+   * For each node visited (including this one), the callback is invoked
+   * with the input ID at that node. The walk does not descend below SMMU
+   * nodes, because RMR mappings only target the SMMU or PCI Root Complex.
+   */
+  virtual void walk_rmr_path(l4_uint64_t src, Walk_rmr_cb const &cb) const = 0;
 
   /**
    * Recursively parse IORT nodes.
@@ -103,6 +127,20 @@ public:
     return ~(l4_uint64_t)0;
   }
 
+  void walk_rmr_path(l4_uint64_t src, Walk_rmr_cb const &cb) const override
+  {
+    cb(*this, src);
+
+    for (auto const &m : _mappings)
+      {
+        if (src < m.in_base || src > m.in_base + m.num)
+          continue;
+
+        m.out_node->walk_rmr_path(src + m.out_base - m.in_base, cb);
+        return;
+      }
+  }
+
   Translator(ACPI_TABLE_IORT *iort, ACPI_IORT_NODE *node, ACPI_TABLE_MADT *madt)
   : Iort_node(node)
   {
@@ -142,6 +180,14 @@ public:
        ACPI_TABLE_MADT *madt)
   : Translator(iort, smmu_node, madt), _idx(idx)
   {}
+
+  void walk_rmr_path(l4_uint64_t src, Walk_rmr_cb const &cb) const override
+  {
+    // The SMMU is a terminal node for RMR matching. The SMMU's own mappings
+    // describe further translation to the ITS for MSIs, which is not relevant
+    // for DMA reservations.
+    cb(*this, src);
+  }
 
 protected:
   l4_uint64_t translate_stream_id(l4_uint64_t src) const override
@@ -183,6 +229,11 @@ struct Its : public Iort_node
     d_printf(DBG_ERR, "IORT: DMA translation requested for ITS (%u, 0x%llx)\n",
              _idx, src);
     return Translation_failed;
+  }
+
+  void walk_rmr_path(l4_uint64_t, Walk_rmr_cb const &) const override
+  {
+    // An ITS is a terminal node and it should never apply to RMRs.
   }
 
 private:
@@ -278,6 +329,113 @@ Iort_node::parse_mappings(ACPI_TABLE_IORT *iort, ACPI_IORT_NODE *node,
 }
 
 /**
+ * IORT Reserved Memory Range.
+ *
+ * Describes one or more reserved memory regions and the set of devices these
+ * regions apply to. See ARM DEN 0049E.g section 2.1.7.
+ */
+class Rmr
+{
+public:
+  struct Mem_region
+  {
+    l4_uint64_t first; ///< First byte of the region.
+    l4_uint64_t last;  ///< Last byte (inclusive) of the region.
+  };
+
+  /**
+   * A set of device IDs at a target node that this RMR applies to.
+   */
+  struct Id_range
+  {
+    /// Target node (SMMU or PCI Root Complex) whose input ID space the IDs
+    /// below refer to.
+    ACPI_IORT_NODE const *out_node;
+    l4_uint32_t out_base; ///< Lowest output ID.
+    l4_uint32_t num;      ///< Number of IDs minus one.
+  };
+
+  Rmr(ACPI_TABLE_IORT *iort, ACPI_IORT_NODE *node)
+  {
+    auto *rmr = ACPI_CAST_PTR(ACPI_IORT_RMR, &node->NodeData);
+    _remap_permitted = rmr->Flags & ACPI_IORT_RMR_REMAP_PERMITTED;
+
+    if (   !node->MappingOffset || !node->MappingCount
+        || !rmr->RmrOffset      || !rmr->RmrCount)
+      {
+        d_printf(DBG_WARN, "IORT: Invalid RMR node! Skipping...\n");
+        return;
+      }
+
+    auto *descs = ACPI_ADD_PTR(ACPI_IORT_RMR_DESC, node, rmr->RmrOffset);
+    _regions.reserve(rmr->RmrCount);
+    for (UINT32 i = 0; i < rmr->RmrCount; i++)
+      {
+        if (descs[i].Length == 0)
+          continue;
+
+        // Warn if the region cannot be addressed by the host.
+        l4_uint64_t base = descs[i].BaseAddress;
+        l4_uint64_t length = descs[i].Length;
+
+        // According to the IORT, the region must be 64KiB aligned. Just warn,
+        // we can cope with unaligned addresses.
+        if (   L4::trunc_order(base, 16) != base
+            || L4::trunc_order(length, 16) != length)
+          d_printf(DBG_WARN,
+                   "IORT: Firmware bug! RMR region not aligned:  [0x%llx, 0x%llx]\n",
+                   base, base + length - 1);
+
+        if (base > std::numeric_limits<l4_addr_t>::max()
+            || std::numeric_limits<l4_addr_t>::max() - base < length - 1)
+          d_printf(DBG_WARN,
+                   "IORT: RMR region [0x%llx, 0x%llx] outside phys address space.\n",
+                   base, base + length - 1);
+
+        _regions.push_back({base, base + length - 1});
+      }
+
+    auto *mappings = ACPI_ADD_PTR(ACPI_IORT_ID_MAPPING, node,
+                                  node->MappingOffset);
+    _id_ranges.reserve(node->MappingCount);
+    for (UINT32 i = 0; i < node->MappingCount; i++)
+      {
+        ACPI_IORT_ID_MAPPING const &mapping = mappings[i];
+        if (!(mapping.Flags & ACPI_IORT_ID_SINGLE_MAPPING))
+          d_printf(DBG_WARN,
+                   "IORT: Firmware bug! Expected single mapping in RMR.\n");
+
+        auto *out_node = ACPI_ADD_PTR(ACPI_IORT_NODE, iort,
+                                      mapping.OutputReference);
+        _id_ranges.push_back({out_node, mapping.OutputBase, mapping.IdCount});
+      }
+  }
+
+  bool matches(Iort_node const &node, l4_uint64_t id) const
+  {
+    for (Id_range const &range : _id_ranges)
+      {
+        if (range.out_node != node.acpi_node())
+          continue;
+        if (id < range.out_base || id > range.out_base + range.num)
+          continue;
+
+        return true;
+      }
+
+    return false;
+  }
+
+  bool remap_permitted() const { return _remap_permitted; }
+  std::vector<Mem_region> const &regions() const { return _regions; }
+
+private:
+  bool _remap_permitted = false;
+  std::vector<Mem_region> _regions;
+  std::vector<Id_range> _id_ranges;
+};
+
+/**
  * IORT table helper.
  *
  * Arm64 ACPI based systems describe the relationship of PCI root complexes,
@@ -321,11 +479,21 @@ public:
       {
         auto *node = ACPI_ADD_PTR(ACPI_IORT_NODE, iort, offset);
         offset += node->Length;
-        if (node->Type != ACPI_IORT_NODE_PCI_ROOT_COMPLEX)
-          continue;
-
-        auto *rc = ACPI_CAST_PTR(ACPI_IORT_ROOT_COMPLEX, &node->NodeData);
-        _pci_segments[rc->PciSegmentNumber] = new Root_complex(iort, node, madt);
+        switch (node->Type)
+          {
+          case ACPI_IORT_NODE_PCI_ROOT_COMPLEX:
+            {
+              auto *rc = ACPI_CAST_PTR(ACPI_IORT_ROOT_COMPLEX, &node->NodeData);
+              _pci_segments[rc->PciSegmentNumber] =
+                new Root_complex(iort, node, madt);
+              break;
+            }
+          case ACPI_IORT_NODE_RMR:
+            _rmrs.emplace_back(iort, node);
+            break;
+          default:
+            break;
+          }
       }
   }
 
@@ -411,11 +579,53 @@ public:
     return res;
   }
 
-  int pci_enum_dma_reservations(Hw::Pci::If *, Hw::Pci::Dma_requester_id,
-                                Dma_domain_if::Resv_cb) const override
+  int pci_enum_dma_reservations(Hw::Pci::If *, Hw::Pci::Dma_requester_id rid,
+                                Dma_domain_if::Resv_cb cb) const override
   {
-    // TODO: report RMRs applicable to the device
-    return 0;
+    if (!rid || _rmrs.empty())
+      return L4_EOK;
+
+    Root_complex const *rc = find_root_complex(rid.segment());
+    if (!rc)
+      return L4_EOK;
+
+    l4_uint64_t src = (unsigned{rid.bus()} << 8) | rid.devfn();
+
+    // Determine which RMRs apply by walking the device's IORT path. An RMR
+    // applies to the device if any of its ID range mappings target a node
+    // visited by the device's path and the device's input ID at that node
+    // falls into the RMR's output ID range.
+    std::set<Rmr const *> matched;
+    auto node_cb = [this, &matched](Iort_node const &node, l4_uint64_t id)
+      {
+        for (Rmr const &rmr : _rmrs)
+          {
+            if (matched.count(&rmr))
+              continue;
+
+            if (rmr.matches(node, id))
+              matched.insert(&rmr);
+          }
+      };
+    rc->walk_rmr_path(src, node_cb);
+
+    for (Rmr const *rmr : matched)
+      {
+        auto type = rmr->remap_permitted()
+                    ? Dma_domain_if::Resv_type::Identity_remappable
+                    : Dma_domain_if::Resv_type::Identity_fixed;
+        for (Rmr::Mem_region const &region : rmr->regions())
+          {
+            d_printf(DBG_DEBUG,
+                     "IORT: %04x:%02x:%02x.%u : RMR [0x%llx, 0x%llx]\n",
+                     rid.segment().get(), rid.bus().get(), rid.dev().get(),
+                     rid.fn().get(), region.first, region.last);
+            if (int ret = cb(type, region.first, region.last); ret < 0)
+              return ret;
+          }
+      }
+
+    return L4_EOK;
   }
 
 private:
@@ -433,6 +643,7 @@ private:
   }
 
   std::map<unsigned, Root_complex *> _pci_segments;
+  std::vector<Rmr> _rmrs;
 };
 
 }
