@@ -54,6 +54,7 @@ public:
     Identity_remappable,  ///< Identity-mapped region that may be remapped.
     Msi_window,           ///< Window to MSI controller
     Bridge_window,        ///< A bridge window that may route P2P traffic
+    Device_mmio,          ///< A device, reachable through P2P traffic
   };
 
   static char const *resv_type_to_str(Resv_type type);

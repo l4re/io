@@ -152,6 +152,7 @@ Dma_domain_if::resv_type_to_str(Resv_type type)
     case Resv_type::Identity_remappable: return "remapable identity mapping";
     case Resv_type::Msi_window:          return "MSI controller window";
     case Resv_type::Bridge_window:       return "P2P PCI bridge window";
+    case Resv_type::Device_mmio:         return "P2P PCI device";
     }
 
   return "unknown";
@@ -209,6 +210,7 @@ Dma_domain_if::set_dma_space(L4Re::Util::Unique_cap<L4Re::Dma_space> dma_space)
           [[fallthrough]];
         case Resv_type::Bridge_window:
         case Resv_type::Msi_window:
+        case Resv_type::Device_mmio:
           return dma_mgr->block_area(L4::Ipc::make_cap_rws(mds->dma_space()),
                                      &first, l4_round_page(last - first + 1));
         default:
