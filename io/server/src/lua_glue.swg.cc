@@ -2992,6 +2992,13 @@ SWIGINTERN void Hw_Device___setitem(Hw::Device *self,std::string const &name,Hw:
 #ifdef __cplusplus
 // removed: extern "C" {
 #endif
+static int _wrap_Resource_res_type_name(lua_State* L) { int SWIG_arg = 0; Resource *arg1 = (Resource *) 0 ; char *result = 0 ;
+  SWIG_check_num_args("Resource::res_type_name",1,1)
+  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("Resource::res_type_name",1,"Resource const *");
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_Resource,0))){
+    SWIG_fail_ptr("Resource_res_type_name",1,SWIGTYPE_p_Resource); } 
+  result = (char *)((Resource const *)arg1)->res_type_name(); lua_pushstring(L,(const char *)result); SWIG_arg++;
+  return SWIG_arg; if(0) SWIG_fail; fail: lua_error(L); return SWIG_arg; }
 static int _wrap_Resource_is_irq(lua_State* L) { int SWIG_arg = 0; Resource *arg1 = (Resource *) 0 ; bool result;
   SWIG_check_num_args("Resource::is_irq",1,1) if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("Resource::is_irq",1,"Resource const *");
   if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_Resource,0))){
@@ -3370,7 +3377,7 @@ static int _wrap_Resource_is_64bit(lua_State* L) { int SWIG_arg = 0; Resource *a
     SWIG_fail_ptr("Resource_is_64bit",1,SWIGTYPE_p_Resource); }  result = (bool)((Resource const *)arg1)->is_64bit();
   lua_pushboolean(L,(int)(result!=0)); SWIG_arg++; return SWIG_arg; if(0) SWIG_fail; fail: lua_error(L); return SWIG_arg; }
 static int _wrap_Resource_alignment__SWIG_1(lua_State* L) { int SWIG_arg = 0; Resource *arg1 = (Resource *) 0 ;
-  l4_umword_t result; SWIG_check_num_args("Resource::alignment",1,1)
+  l4_uint64_t result; SWIG_check_num_args("Resource::alignment",1,1)
   if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("Resource::alignment",1,"Resource const *");
   if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_Resource,0))){
     SWIG_fail_ptr("Resource_alignment",1,SWIGTYPE_p_Resource); }  result = ((Resource const *)arg1)->alignment();
@@ -3409,6 +3416,7 @@ static swig_lua_attribute swig_Resource_attributes[] = {
     {0,0,0}
 };
 static swig_lua_method swig_Resource_methods[]= {
+    { "res_type_name", _wrap_Resource_res_type_name},
     { "is_irq", _wrap_Resource_is_irq},
     { "is_irq_provider", _wrap_Resource_is_irq_provider},
     { "irq_is_level_triggered", _wrap_Resource_irq_is_level_triggered},
@@ -3461,22 +3469,24 @@ static swig_lua_const_info swig_Resource_Sf_SwigStatic_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("F_type_mask", Resource::F_type_mask)},
     {SWIG_LUA_CONSTTAB_INT("F_disabled", Resource::F_disabled)},
     {SWIG_LUA_CONSTTAB_INT("F_hierarchical", Resource::F_hierarchical)},
-    {SWIG_LUA_CONSTTAB_INT("F_prefetchable", Resource::F_prefetchable)},
     {SWIG_LUA_CONSTTAB_INT("F_size_aligned", Resource::F_size_aligned)},
     {SWIG_LUA_CONSTTAB_INT("F_empty", Resource::F_empty)},
     {SWIG_LUA_CONSTTAB_INT("F_rom", Resource::F_rom)},
     {SWIG_LUA_CONSTTAB_INT("F_can_resize", Resource::F_can_resize)},
     {SWIG_LUA_CONSTTAB_INT("F_can_move", Resource::F_can_move)},
     {SWIG_LUA_CONSTTAB_INT("F_width_64bit", Resource::F_width_64bit)},
-    {SWIG_LUA_CONSTTAB_INT("F_cached_mem", Resource::F_cached_mem)},
     {SWIG_LUA_CONSTTAB_INT("F_relative", Resource::F_relative)},
     {SWIG_LUA_CONSTTAB_INT("F_internal", Resource::F_internal)},
+    {SWIG_LUA_CONSTTAB_INT("F_prefetchable", Resource::F_prefetchable)},
+    {SWIG_LUA_CONSTTAB_INT("F_cached_mem", Resource::F_cached_mem)},
     {SWIG_LUA_CONSTTAB_INT("F_vbus_flags_mask", Resource::F_vbus_flags_mask)},
     {SWIG_LUA_CONSTTAB_INT("F_vbus_flags_shift", Resource::F_vbus_flags_shift)},
     {SWIG_LUA_CONSTTAB_INT("Mem_type_base", Resource::Mem_type_base)},
     {SWIG_LUA_CONSTTAB_INT("Mem_type_r", Resource::Mem_type_r)},
     {SWIG_LUA_CONSTTAB_INT("Mem_type_w", Resource::Mem_type_w)},
     {SWIG_LUA_CONSTTAB_INT("Mem_type_rw", Resource::Mem_type_rw)},
+    {SWIG_LUA_CONSTTAB_INT("Mem_type_prefetchable", Resource::Mem_type_prefetchable)},
+    {SWIG_LUA_CONSTTAB_INT("Mem_type_cacheable", Resource::Mem_type_cacheable)},
     {SWIG_LUA_CONSTTAB_INT("Irq_type_base", Resource::Irq_type_base)},
     {SWIG_LUA_CONSTTAB_INT("Irq_type_mask", Resource::Irq_type_mask)},
     {SWIG_LUA_CONSTTAB_INT("Irq_type_none", Resource::Irq_type_none)},
@@ -4355,22 +4365,24 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("Resource_F_type_mask", Resource::F_type_mask)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_disabled", Resource::F_disabled)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_hierarchical", Resource::F_hierarchical)},
-    {SWIG_LUA_CONSTTAB_INT("Resource_F_prefetchable", Resource::F_prefetchable)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_size_aligned", Resource::F_size_aligned)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_empty", Resource::F_empty)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_rom", Resource::F_rom)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_can_resize", Resource::F_can_resize)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_can_move", Resource::F_can_move)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_width_64bit", Resource::F_width_64bit)},
-    {SWIG_LUA_CONSTTAB_INT("Resource_F_cached_mem", Resource::F_cached_mem)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_relative", Resource::F_relative)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_internal", Resource::F_internal)},
+    {SWIG_LUA_CONSTTAB_INT("Resource_F_prefetchable", Resource::F_prefetchable)},
+    {SWIG_LUA_CONSTTAB_INT("Resource_F_cached_mem", Resource::F_cached_mem)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_vbus_flags_mask", Resource::F_vbus_flags_mask)},
     {SWIG_LUA_CONSTTAB_INT("Resource_F_vbus_flags_shift", Resource::F_vbus_flags_shift)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Mem_type_base", Resource::Mem_type_base)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Mem_type_r", Resource::Mem_type_r)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Mem_type_w", Resource::Mem_type_w)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Mem_type_rw", Resource::Mem_type_rw)},
+    {SWIG_LUA_CONSTTAB_INT("Resource_Mem_type_prefetchable", Resource::Mem_type_prefetchable)},
+    {SWIG_LUA_CONSTTAB_INT("Resource_Mem_type_cacheable", Resource::Mem_type_cacheable)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Irq_type_base", Resource::Irq_type_base)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Irq_type_mask", Resource::Irq_type_mask)},
     {SWIG_LUA_CONSTTAB_INT("Resource_Irq_type_none", Resource::Irq_type_none)},
