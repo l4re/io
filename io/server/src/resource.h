@@ -20,9 +20,13 @@
 
 #include "res.h"
 
+///////////////////////////////////////////////////////////////////////////////
+// Careful when using new C++ features: This header is also scanned by swig! //
+// After changing, verify that `make REGEN_FILES=1` still works.             //
+///////////////////////////////////////////////////////////////////////////////
+
 class Resource;
 class Device;
-
 
 class Resource_list : public std::vector<Resource *>
 {
@@ -102,34 +106,32 @@ public:
     F_can_resize   = 0x4000,
     F_can_move     = 0x8000,
 
-    F_width_64bit  =   0x1'0000,
-    F_relative     =   0x4'0000,
-    F_internal     =   0x8'0000, ///< Internal resource not exported to vBUS
+    F_width_64bit  =   0x10000,
+    F_relative     =   0x40000,
+    F_internal     =   0x80000, ///< Internal resource not exported to vBUS
 
-    F_prefetchable = 0x100'0000, ///< exposed on vBUS
-    F_cached_mem   = 0x200'0000, ///< exposed on vBUS
+    F_prefetchable = 0x1000000, ///< exposed on vBUS
+    F_cached_mem   = 0x2000000, ///< exposed on vBUS
 
     /// The upper 12-bits of the flags are exposed on the vBUS.
-    F_vbus_flags_mask     = 0xfff0'0000,
+    F_vbus_flags_mask     = 0xfff00000,
     F_vbus_flags_shift    = 20,
 
     Mem_type_base         = 1 << F_vbus_flags_shift,
-    Mem_type_r            = unsigned{L4VBUS_RESOURCE_F_MEM_R} * Mem_type_base,
-    Mem_type_w            = unsigned{L4VBUS_RESOURCE_F_MEM_W} * Mem_type_base,
+    Mem_type_r            = L4VBUS_RESOURCE_F_MEM_R * Mem_type_base,
+    Mem_type_w            = L4VBUS_RESOURCE_F_MEM_W * Mem_type_base,
     Mem_type_rw           = Mem_type_r | Mem_type_w,
-    Mem_type_prefetchable = unsigned{L4VBUS_RESOURCE_F_MEM_PREFETCHABLE}
-                                                              * Mem_type_base,
-    Mem_type_cacheable    = unsigned{L4VBUS_RESOURCE_F_MEM_CACHEABLE}
-                                                              * Mem_type_base,
+    Mem_type_prefetchable = L4VBUS_RESOURCE_F_MEM_PREFETCHABLE * Mem_type_base,
+    Mem_type_cacheable    = L4VBUS_RESOURCE_F_MEM_CACHEABLE    * Mem_type_base,
 
     Irq_type_base         = 1 << F_vbus_flags_shift,
-    Irq_type_mask         = unsigned{L4_IRQ_F_MASK}       * Irq_type_base,
-    Irq_type_none         = unsigned{L4_IRQ_F_NONE}       * Irq_type_base,
-    Irq_type_level_high   = unsigned{L4_IRQ_F_LEVEL_HIGH} * Irq_type_base,
-    Irq_type_level_low    = unsigned{L4_IRQ_F_LEVEL_LOW}  * Irq_type_base,
-    Irq_type_raising_edge = unsigned{L4_IRQ_F_POS_EDGE}   * Irq_type_base,
-    Irq_type_falling_edge = unsigned{L4_IRQ_F_NEG_EDGE}   * Irq_type_base,
-    Irq_type_both_edges   = unsigned{L4_IRQ_F_BOTH_EDGE}  * Irq_type_base,
+    Irq_type_mask         = L4_IRQ_F_MASK       * Irq_type_base,
+    Irq_type_none         = L4_IRQ_F_NONE       * Irq_type_base,
+    Irq_type_level_high   = L4_IRQ_F_LEVEL_HIGH * Irq_type_base,
+    Irq_type_level_low    = L4_IRQ_F_LEVEL_LOW  * Irq_type_base,
+    Irq_type_raising_edge = L4_IRQ_F_POS_EDGE   * Irq_type_base,
+    Irq_type_falling_edge = L4_IRQ_F_NEG_EDGE   * Irq_type_base,
+    Irq_type_both_edges   = L4_IRQ_F_BOTH_EDGE  * Irq_type_base,
   };
   static_assert(F_prefetchable == Mem_type_prefetchable);
   static_assert(F_cached_mem == Mem_type_cacheable);
