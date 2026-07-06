@@ -83,10 +83,11 @@ Resource::dump(char const *ty, int indent) const
 void
 Resource::dump(int indent) const
 {
-  static char const *ty[] = { "INVLD", "IRQ", "IOMEM", "IOPORT",
-                              "BUS",  "GPIO", "DMADOM", "" };
+  enum { Num_resources = L4VBUS_RESOURCE_MAX };
+  static constexpr char const *ty[Num_resources] =
+  { "INVLD", "IRQ", "IOMEM", "IOPORT", "BUS",  "GPIO", "DMADOM", "CLOCK" };
 
-  dump(ty[type() % 8], indent);
+  dump(ty[type() % Num_resources], indent);
 }
 
 

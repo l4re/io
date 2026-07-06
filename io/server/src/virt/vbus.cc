@@ -223,6 +223,7 @@ System_bus::System_bus(Inhibitor_mux *mux)
   add_resource(new Root_resource(Resource::Mmio_res | Resource::Mem_type_rw
                                  | Resource::F_prefetchable, x));
   add_resource(new Root_resource(Resource::Io_res, x));
+  add_resource(new Root_resource(Resource::Clock_res, x));
   add_resource(new Root_resource(Resource::Dma_domain_res,
                                  new Root_dma_domain_rs(this, &_dma_domain_group)));
 

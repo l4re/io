@@ -94,6 +94,7 @@ public:
   static constexpr unsigned Bus_res        = L4VBUS_RESOURCE_BUS;
   static constexpr unsigned Gpio_res       = L4VBUS_RESOURCE_GPIO;
   static constexpr unsigned Dma_domain_res = L4VBUS_RESOURCE_DMA_DOMAIN;
+  static constexpr unsigned Clock_res      = L4VBUS_RESOURCE_CLOCK;
 
   enum Flags : unsigned long
   {

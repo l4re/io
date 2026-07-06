@@ -62,6 +62,11 @@ function Io.Res.irq(start, ...)
   return Io.Resource(Io.Resource_Irq_res, f, s, e)
 end
 
+function Io.Res.clock(freq_hz)
+  return Io.Resource(Io.Resource_Clock_res, Io.Resource.Clock_res,
+                     freq_hz, freq_hz)
+end
+
 Io.Dt = {}
 
 function Io.Dt.add_child(parent, name, dev, idx)

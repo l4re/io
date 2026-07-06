@@ -44,6 +44,7 @@ enum l4vbus_resource_type_t {
   L4VBUS_RESOURCE_BUS,         /**< Bus resource */
   L4VBUS_RESOURCE_GPIO,        /**< Gpio resource */
   L4VBUS_RESOURCE_DMA_DOMAIN,  /**< DMA domain */
+  L4VBUS_RESOURCE_CLOCK,       /**< Clock with dedicated frequency */
   L4VBUS_RESOURCE_MAX,         /**< Maximum resource id */
 };
 
