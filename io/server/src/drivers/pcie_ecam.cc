@@ -297,7 +297,14 @@ public:
   int translate_dma_src(Hw::Pci::Dma_requester_id rid, l4_uint64_t *si) const override
   {
     if (!_iommu_map.present())
-      return -L4_ENODEV;
+      {
+        d_printf(DBG_ERR,
+                 "%s: cannot translate DMA source %04x:%02x:%02x.%u: "
+                 "no iommu_map provided!\n",
+                 name(), rid.segment().get(), rid.bus().get(), rid.dev().get(),
+                 rid.fn().get());
+        return -L4_ENODEV;
+      }
 
     // Start from a standard PCI requester ID according.
     l4_uint64_t src = (unsigned{rid.bus()} << 8) | rid.devfn();
