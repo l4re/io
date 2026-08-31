@@ -13,8 +13,6 @@
 namespace Hw
 {
 
-namespace
-{
 class Iommus_property : public Property
 {
 public:
@@ -86,7 +84,6 @@ private:
 
   std::vector<Dma_interface> _interfaces;
 };
-} // namespace
 
 /**
  * Hw::Device with specific properties for IOMMUs.
