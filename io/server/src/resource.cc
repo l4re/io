@@ -108,9 +108,10 @@ void Mmio_data_space::alloc_ram(Size size, unsigned long alloc_flags)
         "associating DMA space for CPU physical");
       dma_space = d.release();
     }
-  long ma_flags = L4Re::Mem_alloc::Continuous;
 
-  ma_flags |= alloc_flags ? L4Re::Mem_alloc::Super_pages : 0;
+  unsigned long ma_flags = L4Re::Mem_alloc::Continuous;
+  if (alloc_flags)
+    ma_flags |= L4Re::Mem_alloc::Super_pages;
 
   _ds_ram = L4Re::Util::make_unique_cap<L4Re::Dataspace>();
   if (!_ds_ram.is_valid())
